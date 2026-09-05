@@ -125,6 +125,7 @@ function iniciarPanel() {
     if(horaInicio && horaFin) { document.getElementById('info-horario').textContent = `Programado para abrir: ${horaInicio} a ${horaFin}`; } 
     else { document.getElementById('info-horario').textContent = "Sube un Excel para configurar el nuevo turno."; }
     actualizarUIControlSistema();
+    actualizarConteos(conteosActuales);
   });
   
   db.ref('evento/vips_pendientes').on('value', snap => {
