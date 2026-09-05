@@ -182,7 +182,7 @@ async function procesarVipAutomatico(dni, datos) {
             nombre: datos.nombre,
             categoria: datos.categoria,
             comedor: comedor,
-            fecha: f + ' (Auto VIP 50%)',
+            fecha: f,
             timestamp: firebase.database.ServerValue.TIMESTAMP
         });
     }
@@ -218,7 +218,7 @@ function procesarExcel() {
       updates['evento/datos_iniciales'] = { limites: lim, trabajadores: trab, horaInicio: hInicio, horaFin: hFin, sistemaForzado: null };
       updates['evento/vips_pendientes'] = preVips; 
       
-      db.ref().update(updates).then(() => alert(`Excel cargado. ${Object.keys(preVips).length} VIPs en modo espera (Regla 50%). Sistema listo.`));
+      db.ref().update(updates).then(() => alert("Archivo Excel control de comensales cargado."));
     } catch (er) { alert("Error al leer Excel. Asegura que tenga las 3 pestañas."); }
   }; reader.readAsArrayBuffer(file);
 }
