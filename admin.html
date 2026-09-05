@@ -102,6 +102,8 @@
 <script src="config.js"></script>
 <script>
 let db, auth, LIMITES = {}, TRABAJADORES = {}, todosLosRegistros = [], sistemaForzado = null, horaInicio = "", horaFin = "";
+let vipsPendientes = {}, conteosActuales = {};
+
 document.addEventListener('DOMContentLoaded', () => {
   if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
   db = firebase.database(); auth = firebase.auth();
@@ -112,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 function iniciarSesion() { auth.signInWithEmailAndPassword(document.getElementById('txt-email').value, document.getElementById('txt-pass').value).then(() => document.getElementById('login-error').style.display='none').catch(() => document.getElementById('login-error').style.display='block'); }
 function cerrarSesion() { auth.signOut(); }
+
 function iniciarPanel() {
   db.ref('evento/datos_iniciales').on('value', snap => {
     const data = snap.val() || {}; 
@@ -121,13 +124,78 @@ function iniciarPanel() {
     document.getElementById('stat-padron').textContent = Object.keys(TRABAJADORES).length;
     if(horaInicio && horaFin) { document.getElementById('info-horario').textContent = `Programado para abrir: ${horaInicio} a ${horaFin}`; } 
     else { document.getElementById('info-horario').textContent = "Sube un Excel para configurar el nuevo turno."; }
-    actualizarUIControlSistema(); actualizarConteos(data.conteos_dummy || {});
+    actualizarUIControlSistema();
   });
-  db.ref('evento/conteos').on('value', snap => actualizarConteos(snap.val() || {}));
+  
+  // El Panel escucha los VIPS en espera
+  db.ref('evento/vips_pendientes').on('value', snap => {
+    vipsPendientes = snap.val() || {};
+    verificarDisparoVIPs();
+  });
+  
+  // El Panel escucha el avance del llenado
+  db.ref('evento/conteos').on('value', snap => {
+    conteosActuales = snap.val() || {};
+    actualizarConteos(conteosActuales);
+    verificarDisparoVIPs(); // Chequea el 50% cada vez que alguien se registra
+  });
+  
   db.ref('evento/elecciones').on('value', snap => actualizarElecciones(snap.val() || {}));
   document.getElementById('search-input').addEventListener('input', filtrarTabla);
   setInterval(actualizarUIControlSistema, 10000);
 }
+
+// LOGICA MAESTRA: El Robot que dispara el VIP al 50%
+function verificarDisparoVIPs() {
+    if (!vipsPendientes || Object.keys(vipsPendientes).length === 0) return;
+    if (!LIMITES || Object.keys(LIMITES).length === 0) return;
+    
+    Object.entries(vipsPendientes).forEach(([dni, datos]) => {
+        const comedor = datos.comedor;
+        const cat = (datos.categoria === 'EMPLEADO' || datos.categoria === 'PRACTICANTE') ? 'empleado' : 'obrero';
+        const limite = (LIMITES[comedor] || {})[cat] || 0;
+        const uso = (conteosActuales[comedor] || {})[cat] || 0;
+        
+        // Calcula el 50% matemáticamente
+        const umbral = limite / 2;
+        
+        // Si el uso ya llegó al 50%, el robot actúa
+        if (limite > 0 && uso >= umbral) {
+            procesarVipAutomatico(dni, datos);
+        }
+    });
+}
+
+async function procesarVipAutomatico(dni, datos) {
+    const comedor = datos.comedor;
+    const cat = (datos.categoria === 'EMPLEADO' || datos.categoria === 'PRACTICANTE') ? 'empleado' : 'obrero';
+    
+    // El robot reclama al VIP de la lista de pendientes para que no se duplique
+    const claim = await db.ref(`evento/vips_pendientes/${dni}`).transaction(vipData => {
+        if (vipData) return null; 
+        return; 
+    });
+
+    if (claim.committed && claim.snapshot.exists()) {
+        // Bloquea el cupo en el comedor
+        await db.ref(`evento/conteos/${comedor}`).transaction(actual => {
+            const act = actual || { obrero: 0, empleado: 0 };
+            return { ...act, [cat]: (act[cat] || 0) + 1 };
+        });
+        
+        // Registra al VIP oficialmente en la base de datos
+        const ahora = new Date();
+        const f = ahora.toLocaleDateString('es-PE') + ' ' + ahora.toTimeString().slice(0, 8);
+        await db.ref(`evento/elecciones/${dni}`).set({
+            nombre: datos.nombre,
+            categoria: datos.categoria,
+            comedor: comedor,
+            fecha: f + ' (Auto VIP 50%)',
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+    }
+}
+
 function procesarExcel() {
   const file = document.getElementById('excel-file').files[0]; if (!file) { alert("Selecciona un Excel."); return; }
   const reader = new FileReader();
@@ -135,16 +203,34 @@ function procesarExcel() {
     try {
       const wb = XLSX.read(new Uint8Array(e.target.result), {type: 'array', cellDates: true, dateNF: 'yyyy-mm-dd hh:mm'}); 
       let lim = {}, trab = {}, hInicio = "", hFin = "";
+      let preVips = {}; // Aquí guardamos a los VIPs en espera
+      
       if (wb.Sheets['CONFIGURACION']) {
         const filasConf = XLSX.utils.sheet_to_json(wb.Sheets['CONFIGURACION'], {header: 1, raw: false});
         filasConf.forEach(f => { if(f[0] === 'INICIO' && f[1]) hInicio = String(f[1]).trim(); if(f[0] === 'FIN' && f[1]) hFin = String(f[1]).trim(); });
       }
       if (wb.Sheets['COMEDORES']) { XLSX.utils.sheet_to_json(wb.Sheets['COMEDORES'], {header: 1}).slice(1).forEach(f => { if(f[0]) lim[String(f[0]).trim()] = {obrero: parseInt(f[1])||0, empleado: parseInt(f[2])||0}; }); }
-      if (wb.Sheets['TRABAJADORES']) { XLSX.utils.sheet_to_json(wb.Sheets['TRABAJADORES'], {header: 1}).slice(1).forEach(f => { if(f[0]) trab[String(f[0]).trim().replace(/\D/g,'').padStart(8,'0')] = {nombre: String(f[1]||"").trim(), categoria: String(f[2]||"OBRERO").toUpperCase().trim(), vip: f[3]?String(f[3]).trim():""}; }); }
-      db.ref('evento/datos_iniciales').update({ limites: lim, trabajadores: trab, horaInicio: hInicio, horaFin: hFin, sistemaForzado: null }).then(() => alert(`Excel cargado. Sistema listo.`));
+      if (wb.Sheets['TRABAJADORES']) { XLSX.utils.sheet_to_json(wb.Sheets['TRABAJADORES'], {header: 1}).slice(1).forEach(f => { 
+          if(f[0]){
+              let dni = String(f[0]).trim().replace(/\D/g,'').padStart(8,'0');
+              let nombre = String(f[1]||"").trim();
+              let cat = String(f[2]||"OBRERO").toUpperCase().trim();
+              let vip = f[3]?String(f[3]).trim():"";
+              trab[dni] = {nombre: nombre, categoria: cat, vip: vip};
+              
+              if (vip !== "") { preVips[dni] = {nombre: nombre, categoria: cat, comedor: vip}; }
+          }
+      }); }
+      
+      let updates = {};
+      updates['evento/datos_iniciales'] = { limites: lim, trabajadores: trab, horaInicio: hInicio, horaFin: hFin, sistemaForzado: null };
+      updates['evento/vips_pendientes'] = preVips; // Se suben a la sala de espera invisible
+      
+      db.ref().update(updates).then(() => alert(`Excel cargado. ${Object.keys(preVips).length} VIPs en modo espera (Regla 50%). Sistema listo.`));
     } catch (er) { alert("Error al leer Excel. Asegura que tenga las 3 pestañas."); }
   }; reader.readAsArrayBuffer(file);
 }
+
 function evaluarEstadoActual() {
     if (sistemaForzado === true) return true;
     if (sistemaForzado === false) return false;

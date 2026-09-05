@@ -190,31 +190,38 @@ function clrErr(base) { document.getElementById(base).classList.remove('show'); 
 
 document.addEventListener('DOMContentLoaded', cargarSistema);
 
-async function cargarSistema() {
+function cargarSistema() {
   show('sec-loader'); document.getElementById('btn-reintentar').style.display = 'none';
   try {
     if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     db = firebase.database();
-    const snap = await db.ref('evento/datos_iniciales').once('value');
-    const data = snap.val() || {};
     
-    let abierto = false;
-    if (data.sistemaForzado === true) { abierto = true; }
-    else if (data.sistemaForzado === false) { abierto = false; }
-    else if (data.horaInicio && data.horaFin) {
-        const ahora = new Date();
-        const fInicio = new Date(data.horaInicio.replace(' ', 'T'));
-        const fFin = new Date(data.horaFin.replace(' ', 'T'));
-        if (ahora >= fInicio && ahora <= fFin) abierto = true;
-    }
+    db.ref('evento/datos_iniciales').on('value', (snap) => {
+      const data = snap.val() || {};
+      let abierto = false;
+      
+      if (data.sistemaForzado === true) { abierto = true; }
+      else if (data.sistemaForzado === false) { abierto = false; }
+      else if (data.horaInicio && data.horaFin) {
+          const ahora = new Date();
+          const fInicio = new Date(data.horaInicio.replace(' ', 'T'));
+          const fFin = new Date(data.horaFin.replace(' ', 'T'));
+          if (ahora >= fInicio && ahora <= fFin) abierto = true;
+      }
 
-    if (!abierto) {
-      document.getElementById('msg-cerrado').textContent = data.mensajeSistema || "El sistema se encuentra cerrado actualmente.";
-      show('sec-cerrado'); return;
-    }
-    
-    TRABAJADORES = data.trabajadores || {}; LIMITES = data.limites || {};
-    show('sec-dni'); document.getElementById('input-dni').focus();
+      TRABAJADORES = data.trabajadores || {}; LIMITES = data.limites || {};
+
+      if (!abierto) {
+        document.getElementById('msg-cerrado').textContent = data.mensajeSistema || "El turno de elección ha finalizado por orden de Administración.";
+        const viendoTicket = document.getElementById('sec-exito').classList.contains('on') || document.getElementById('sec-ya').classList.contains('on');
+        if (!viendoTicket) { show('sec-cerrado'); }
+        return;
+      }
+      
+      if (document.getElementById('sec-loader').classList.contains('on') || document.getElementById('sec-cerrado').classList.contains('on')) {
+         show('sec-dni'); document.getElementById('input-dni').focus();
+      }
+    });
   } catch (e) {
     document.getElementById('msg-cerrado').textContent = 'No se pudo conectar. Verifica tu internet e intenta de nuevo.';
     document.getElementById('btn-reintentar').style.display = 'block'; show('sec-cerrado');
@@ -251,8 +258,9 @@ async function validarTrabajador() {
   
   usr = { dni, nombre: TRABAJADORES[dni].nombre, categoria: TRABAJADORES[dni].categoria, vip: TRABAJADORES[dni].vip || "" };
   
+  // Si el VIP se mete a la app manualmente ANTES de llegar al 50%, le limpiamos su espacio
   if (usr.vip !== "") {
-      comedorSel = usr.vip;
+      comedorSel = usr.vip.trim();
       await confirmarEleccion(true);
       return;
   }
@@ -272,6 +280,8 @@ function suscribirConteos() {
 }
 
 function pintarComedores(conteos) {
+  if (confirmando) return; // Congela la pantalla si ya está procesando
+  
   const cont = document.getElementById('lista-comedores');
   const disponibles = Object.entries(LIMITES).map(([nombre, max]) => {
     const campo = esEmp(usr.categoria) ? 'empleado' : 'obrero';
@@ -304,7 +314,10 @@ function pintarComedores(conteos) {
 async function confirmarEleccion(esModoVIP) {
   if (!comedorSel || confirmando) return; 
   confirmando = true;
+  
+  const comedorElegido = comedorSel; // Bóveda de protección
   const btn = document.getElementById('btn-elegir'); 
+  
   if(!esModoVIP) { 
     btn.disabled = true; 
     btn.textContent = 'Procesando...'; 
@@ -312,12 +325,12 @@ async function confirmarEleccion(esModoVIP) {
   }
   
   const campo = esEmp(usr.categoria) ? 'empleado' : 'obrero'; 
-  const limite = (LIMITES[comedorSel] || {})[campo] || 0;
+  const limite = (LIMITES[comedorElegido] || {})[campo] || 0;
   
   try {
     const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), 8000));
     
-    const transactionPromise = db.ref(`evento/conteos/${comedorSel}`).transaction(datos => {
+    const transactionPromise = db.ref(`evento/conteos/${comedorElegido}`).transaction(datos => {
       const act = datos || { obrero: 0, empleado: 0 }; 
       const uso = act[campo] || 0;
       if (uso >= limite && !esModoVIP) return; 
@@ -328,21 +341,27 @@ async function confirmarEleccion(esModoVIP) {
     
     if (!res.committed && !esModoVIP) {
       confirmando = false; 
-      activarExpulsion(comedorSel); 
+      activarExpulsion(comedorElegido); 
       comedorSel = ''; 
       return;
     }
     
     const ahora = new Date(); 
     const f = ahora.toLocaleDateString('es-PE') + ' ' + ahora.toTimeString().slice(0, 8);
+    
     await db.ref(`evento/elecciones/${usr.dni}`).set({ 
-      nombre: usr.nombre, categoria: usr.categoria, comedor: comedorSel, fecha: f, timestamp: firebase.database.ServerValue.TIMESTAMP 
+      nombre: usr.nombre, categoria: usr.categoria, comedor: comedorElegido, fecha: f, timestamp: firebase.database.ServerValue.TIMESTAMP 
     });
+    
+    // Si el VIP se mete manualmente a la app, el sistema le borra su cupo pendiente para que el Panel de Control no lo duplique
+    if (esModoVIP) {
+        await db.ref(`evento/vips_pendientes/${usr.dni}`).remove();
+    }
     
     if(!esModoVIP) { btn.textContent = 'Confirmar Elección'; }
     if (unsubConteos) db.ref('evento/conteos').off('value', unsubConteos);
     
-    document.getElementById('exito-comedor').textContent = comedorSel; 
+    document.getElementById('exito-comedor').textContent = comedorElegido; 
     document.getElementById('exito-nombre').textContent = usr.nombre; 
     document.getElementById('exito-dni').textContent = usr.dni; 
     document.getElementById('exito-cat').textContent = usr.categoria; 
@@ -353,6 +372,7 @@ async function confirmarEleccion(esModoVIP) {
     window.relojTicketExito = setInterval(() => { document.getElementById('live-clock-exito').textContent = new Date().toLocaleTimeString('es-PE'); }, 1000);
 
     confirmando = false; 
+    comedorSel = ''; 
     show('sec-exito');
     
     if(esModoVIP) {
@@ -367,7 +387,7 @@ async function confirmarEleccion(esModoVIP) {
       btn.textContent = 'Confirmar Elección'; 
       btn.disabled = false; 
       if (e.message === "TIMEOUT") {
-        setErr('err-com', 'La conexión está muy lenta. Vuelve a presionar Confirmar.');
+        setErr('err-com', 'La conexión está lenta. Vuelve a presionar Confirmar.');
       } else {
         setErr('err-com', 'Error de red. Intenta de nuevo.'); 
       }
