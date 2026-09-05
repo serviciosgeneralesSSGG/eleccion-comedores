@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+  <title>Elección de Comedores</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Montserrat:wght@800&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <style>
+    :root {--bg:#F9FAFB;--surface:#FFFFFF;--ink:#000000;--ink-soft:#4B5563;--ink-faint:#9CA3AF;--border:#E5E7EB;--accent:#DC2626;--accent-bg:#FEF2F2;--accent-bdr:#FECACA;--ok:#16A34A;--ok-bg:#F0FDF4;--info-bg:#EFF6FF;--info-text:#1D4ED8;--warn-bg:#FFFBEB;--warn-bdr:#FDE68A;--warn-text:#92400E;--radius-lg:16px;--radius-md:10px;--radius-sm:8px;--shadow:0 4px 6px -1px rgba(0,0,0,.05),0 2px 4px -1px rgba(0,0,0,.03);--trans:.2s ease;}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);min-height:100svh;display:flex;align-items:center;justify-content:center;padding:16px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);width:100%;max-width:450px;overflow:hidden;margin:0 auto}
+    .card-header{padding:26px 28px 18px;border-bottom:1px solid var(--border);text-align:center}
+    .card-header h1{font-family:'Montserrat',sans-serif;font-weight:800;font-size:22px;color:var(--ink);line-height:1.25;letter-spacing:-.5px}
+    .card-body{padding:24px 28px 28px}
+    .sec{display:none}.sec.on{display:block}
+    .loader{display:flex;flex-direction:column;align-items:center;gap:14px;padding:36px 0}
+    .spinner{width:30px;height:30px;border:3px solid var(--border);border-top-color:var(--ink);border-radius:50%;animation:spin .75s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .loader p{font-size:14px;color:var(--ink-soft);font-weight:500}
+    .state-block{text-align:center;padding:28px 0 8px}
+    .state-icon{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+    .state-icon svg{width:28px;height:28px}
+    .state-icon.red {background:var(--accent-bg);color:var(--accent)}.state-icon.blue{background:var(--info-bg);color:var(--info-text)}.state-icon.green{background:var(--ok-bg);color:var(--ok)}
+    .state-block h2{font-family:'DM Serif Display',serif;font-size:22px;color:var(--ink);margin-bottom:8px}
+    .state-block p{font-size:14px;color:var(--ink-soft);line-height:1.6}
+    label{display:block;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--ink);margin-bottom:8px}
+    .field{margin-top:16px}
+    .dni-wrap{position:relative}
+    input.inp-text{width:100%;padding:14px 44px 14px 16px;font-family:'DM Sans',sans-serif;font-size:20px;font-weight:600;color:var(--ink);background:var(--surface);border:2px solid var(--border);border-radius:var(--radius-md);outline:none;letter-spacing:3px;transition:border-color var(--trans)}
+    input.inp-text:focus{border-color:var(--ink)}
+    .dni-clear{position:absolute;right:12px;top:50%;transform:translateY(-50%);width:24px;height:24px;background:var(--border);border:none;border-radius:50%;cursor:pointer;display:none;align-items:center;justify-content:center;color:var(--ink-soft);font-size:14px}
+    .dni-clear:hover{background:#D1D5DB;color:var(--ink)}.dni-clear.show{display:flex}
+    .input-hint{font-size:12px;color:var(--ink-faint);margin-top:6px}
+    .btn{width:100%;padding:14px 16px;border:2px solid var(--ink);border-radius:var(--radius-md);font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:all var(--trans)}
+    .btn:active:not(:disabled){transform:scale(.98)}.btn-primary{background:var(--ink);color:#fff;margin-top:18px}
+    .btn-primary:hover:not(:disabled){background:#222;border-color:#222}.btn-primary:disabled{background:var(--surface);color:var(--ink-faint);border-color:var(--border);cursor:not-allowed}
+    .btn-ghost{background:transparent;color:var(--ink);margin-top:12px}.btn-ghost:hover{background:var(--ink);color:#fff}
+    .alert{display:none;margin-top:14px;padding:12px 14px;border-radius:var(--radius-sm);font-size:13px;line-height:1.5;font-weight:500}
+    .alert.show{display:flex;gap:8px;align-items:flex-start}.alert svg{width:18px;height:18px;flex-shrink:0}
+    .alert.err{background:var(--accent-bg);border:1px solid var(--accent-bdr);color:var(--accent)}
+    .worker-badge{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);margin-bottom:20px}
+    .avatar{width:40px;height:40px;flex-shrink:0;background:var(--bg);border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--ink);font-family:'DM Serif Display',serif;font-size:16px}
+    .worker-name{font-size:14px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .worker-meta{font-size:12px;color:var(--ink-soft);margin-top:2px}
+    .cat-pill{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:2px 8px;border-radius:20px;background:#E5E7EB;color:var(--ink);margin-left:6px;vertical-align:middle}
+    .comedores-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .sec-title{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--ink)}
+    .live-badge{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ok);font-weight:600}
+    .live-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);animation:livePulse 1.8s ease-in-out infinite}
+    @keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+    .comedores-list{display:flex;flex-direction:column;gap:8px;max-height:270px;overflow-y:auto;padding-right:4px}
+    .comedor-item{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-md);cursor:pointer;background:var(--surface);transition:all var(--trans);user-select:none}
+    .comedor-item:hover,.comedor-item.sel{border-color:var(--ink);background:var(--ink)}
+    .cn{font-size:14px;font-weight:700;color:var(--ink);transition:color var(--trans)}.comedor-item:hover .cn,.comedor-item.sel .cn{color:#fff}
+    .cpill{font-size:11.5px;font-weight:700;padding:4px 12px;background:var(--bg);color:var(--ink);border:1px solid var(--border);border-radius:20px;white-space:nowrap;transition:all var(--trans)}
+    .comedor-item:hover .cpill,.comedor-item.sel .cpill{background:#E5E7EB;color:var(--ink);border-color:transparent}
+    .no-cupos{text-align:center;padding:32px 0;color:var(--ink-soft);font-size:14px;line-height:1.6;font-weight:500}
+    .ya-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px;margin:20px 0}
+    .ya-card-label{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px}
+    .ya-comedor{font-family:'DM Serif Display',serif;font-size:26px;color:var(--ink);margin-bottom:12px}
+    .ya-meta{font-size:13px;color:var(--ink-soft)}.ya-meta strong{color:var(--ink);font-weight:600}
+    .exito-comedor{display:inline-block;margin-top:16px;padding:10px 24px;background:var(--ink);border:1px solid var(--ink);border-radius:var(--radius-md);font-size:16px;font-weight:700;color:#fff;letter-spacing:.5px}
+    .exito-hora{margin-top:12px;font-size:14px;color:var(--ink-soft)}.exito-hora strong{color:var(--ink);font-weight:700}
+    .expulsion-box{margin-top:16px;padding:16px;background:var(--warn-bg);border:2px solid var(--warn-bdr);border-radius:var(--radius-md);text-align:center;display:none}
+    .expulsion-box p{font-size:13px;color:var(--warn-text);font-weight:600;margin-bottom:10px}
+    .countdown-ring{position:relative;width:64px;height:64px;margin:0 auto}.countdown-ring svg{transform:rotate(-90deg)}
+    .ring-bg{fill:none;stroke:#FDE68A;stroke-width:5}
+    .ring-fg{fill:none;stroke:var(--warn-text);stroke-width:5;stroke-linecap:round;transition:stroke-dashoffset 1s linear}
+    .countdown-num{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Montserrat',sans-serif;font-size:22px;font-weight:800;color:var(--warn-text)}
+    .divider{height:1px;background:var(--border);margin:24px 0}
+    .ani{animation:fadeUp .3s ease forwards}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    
+    .ticket-vivo { position: relative; overflow: hidden; }
+    .ticket-bg { position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; opacity: 0.04; font-size: 24px; font-weight: 800; word-break: break-all; pointer-events: none; transform: rotate(-20deg); z-index: 0; }
+    .live-clock { position: relative; z-index: 2; margin-top: 16px; font-family: monospace; font-size: 22px; font-weight: 700; color: #fff; background: var(--ink); padding: 8px 24px; border-radius: 30px; display: inline-block; letter-spacing: 2px; }
+    .content-front { position: relative; z-index: 2; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div id="card-header" class="card-header"><h1>ELECCIÓN DE COMEDORES</h1></div>
+  <div class="card-body">
+    
+    <div id="sec-loader" class="sec on">
+      <div class="loader ani"><div class="spinner"></div><p id="loader-msg">Conectando con el sistema...</p></div>
+    </div>
+
+    <div id="sec-cerrado" class="sec">
+      <div class="state-block ani">
+        <div class="state-icon red"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 3h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg></div>
+        <h2>Sistema Cerrado</h2>
+        <p id="msg-cerrado"></p>
+        <button id="btn-reintentar" class="btn btn-ghost" style="display:none;margin-top:20px" onclick="cargarSistema()">Reintentar conexión</button>
+      </div>
+    </div>
+
+    <div id="sec-dni" class="sec">
+      <div class="ani">
+        <div class="field">
+          <label>Número de DNI</label>
+          <div class="dni-wrap">
+            <input type="text" id="input-dni" class="inp-text" inputmode="numeric" maxlength="8" placeholder="00000000" autocomplete="off" oninput="onDniInput()" onkeydown="onDniKey(event)">
+            <button class="dni-clear" id="dni-clear" onclick="limpiarDni()" tabindex="-1">✕</button>
+          </div>
+          <p class="input-hint">Ingrese sus 8 dígitos</p>
+        </div>
+        <button id="btn-continuar" class="btn btn-primary" onclick="validarTrabajador()" disabled>Continuar</button>
+        <div id="err-dni" class="alert err"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 3h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><span id="err-dni-txt"></span></div>
+      </div>
+    </div>
+
+    <div id="sec-ya" class="sec">
+      <div class="state-block ani ticket-vivo">
+        <div id="ticket-bg-ya" class="ticket-bg"></div>
+        <div class="state-icon blue content-front"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+        <h2 class="content-front">Registrado</h2>
+        <p class="content-front">Hola, <strong id="ya-nombre" style="color:var(--ink)"></strong></p>
+        <div class="ya-card content-front" style="background: rgba(255,255,255,0.9);">
+          <div class="ya-card-label">Tu comedor elegido es:</div>
+          <div id="ya-comedor" class="ya-comedor"></div>
+          <div class="ya-meta">Registrado el <strong id="ya-fecha"></strong></div>
+        </div>
+        <div id="live-clock-ya" class="live-clock">--:--:--</div>
+        <div class="divider content-front"></div>
+        <button class="btn btn-ghost content-front" onclick="regresarInicio()">Regresar</button>
+      </div>
+    </div>
+
+    <div id="sec-comedores" class="sec">
+      <div class="ani">
+        <div class="worker-badge">
+          <div class="avatar" id="worker-av"></div>
+          <div style="overflow:hidden">
+            <div class="worker-name" id="lbl-nombre"></div>
+            <div class="worker-meta">DNI <span id="lbl-dni" style="font-weight:600;color:var(--ink)"></span><span class="cat-pill" id="lbl-cat"></span></div>
+          </div>
+        </div>
+        <div class="comedores-header">
+          <div class="sec-title">Comedores Disponibles</div>
+          <div class="live-badge"><div class="live-dot"></div>EN VIVO</div>
+        </div>
+        <div id="lista-comedores" class="comedores-list"></div>
+        <div class="expulsion-box" id="expulsion-box">
+          <p id="expulsion-msg"></p>
+          <div class="countdown-ring">
+            <svg viewBox="0 0 64 64" width="64" height="64"><circle class="ring-bg" cx="32" cy="32" r="27"/><circle class="ring-fg" id="ring-fg" cx="32" cy="32" r="27"/></svg>
+            <div class="countdown-num" id="countdown-num">5</div>
+          </div>
+        </div>
+        <button id="btn-elegir" class="btn btn-primary" onclick="confirmarEleccion(false)" disabled>Confirmar Elección</button>
+        <div id="err-com" class="alert err"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 3h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><span id="err-com-txt"></span></div>
+      </div>
+    </div>
+
+    <div id="sec-exito" class="sec">
+      <div class="state-block ani ticket-vivo">
+        <div id="ticket-bg-exito" class="ticket-bg"></div>
+        <div class="state-icon green content-front"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></div>
+        <h2 class="content-front">¡Registro exitoso!</h2>
+        <p class="content-front">Usted ha elegido el comedor:</p>
+        <div id="exito-comedor" class="exito-comedor content-front"></div>
+        <div class="ya-card content-front" style="text-align:left;margin-top:16px;background: rgba(255,255,255,0.9);">
+          <div class="ya-card-label">Datos del trabajador</div>
+          <div class="ya-meta" style="margin-bottom:4px"><strong id="exito-nombre" style="color:var(--ink);font-size:15px"></strong></div>
+          <div class="ya-meta">DNI <strong id="exito-dni" style="color:var(--ink)"></strong> &nbsp;·&nbsp; <strong id="exito-cat" style="color:var(--ink)"></strong></div>
+        </div>
+        <div id="live-clock-exito" class="live-clock">--:--:--</div>
+        <div id="exito-hora" class="exito-hora content-front" style="margin-top:8px;"></div>
+        <div class="divider content-front"></div>
+        <button class="btn btn-ghost content-front" onclick="volverARegistrar()">Volver al Inicio</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+let db; let TRABAJADORES = {}; let LIMITES = {}; let usr = { dni:'', nombre:'', categoria:'', vip:'' };
+let comedorSel = ''; let confirmando = false; let unsubConteos = null; let timerCountdown = null;
+
+function show(id) { ['sec-loader','sec-cerrado','sec-dni','sec-ya','sec-comedores','sec-exito'].forEach(s => document.getElementById(s).classList.remove('on')); document.getElementById(id).classList.add('on'); }
+function setErr(base, msg) { const el = document.getElementById(base); el.className = 'alert err show'; document.getElementById(base+'-txt').textContent = msg; }
+function clrErr(base) { document.getElementById(base).classList.remove('show'); }
+
+document.addEventListener('DOMContentLoaded', cargarSistema);
+
+async function cargarSistema() {
+  show('sec-loader'); document.getElementById('btn-reintentar').style.display = 'none';
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database();
+    const snap = await db.ref('evento/datos_iniciales').once('value');
+    const data = snap.val() || {};
+    
+    let abierto = false;
+    if (data.sistemaForzado === true) { abierto = true; }
+    else if (data.sistemaForzado === false) { abierto = false; }
+    else if (data.horaInicio && data.horaFin) {
+        const ahora = new Date();
+        const fInicio = new Date(data.horaInicio.replace(' ', 'T'));
+        const fFin = new Date(data.horaFin.replace(' ', 'T'));
+        if (ahora >= fInicio && ahora <= fFin) abierto = true;
+    }
+
+    if (!abierto) {
+      document.getElementById('msg-cerrado').textContent = data.mensajeSistema || "El sistema se encuentra cerrado actualmente.";
+      show('sec-cerrado'); return;
+    }
+    
+    TRABAJADORES = data.trabajadores || {}; LIMITES = data.limites || {};
+    show('sec-dni'); document.getElementById('input-dni').focus();
+  } catch (e) {
+    document.getElementById('msg-cerrado').textContent = 'No se pudo conectar. Verifica tu internet e intenta de nuevo.';
+    document.getElementById('btn-reintentar').style.display = 'block'; show('sec-cerrado');
+  }
+}
+
+function onDniInput() {
+  const inp = document.getElementById('input-dni'); inp.value = inp.value.replace(/\D/g, '').slice(0, 8);
+  document.getElementById('dni-clear').classList.toggle('show', inp.value.length > 0);
+  document.getElementById('btn-continuar').disabled = (inp.value.length !== 8); clrErr('err-dni');
+}
+function onDniKey(e) { if (e.key === 'Enter' && !document.getElementById('btn-continuar').disabled) validarTrabajador(); }
+function limpiarDni() { document.getElementById('input-dni').value = ''; document.getElementById('input-dni').focus(); onDniInput(); }
+
+async function validarTrabajador() {
+  clrErr('err-dni'); let dni = document.getElementById('input-dni').value.padStart(8, '0');
+  if (!TRABAJADORES[dni]) { setErr('err-dni', 'DNI no registrado en el padrón. Consulte con Administración.'); return; }
+  
+  const btn = document.getElementById('btn-continuar');
+  btn.disabled = true; btn.textContent = "Verificando...";
+  
+  const snap = await db.ref(`evento/elecciones/${dni}`).once('value');
+  if (snap.exists()) {
+    const reg = snap.val(); document.getElementById('ya-nombre').textContent = TRABAJADORES[dni].nombre;
+    document.getElementById('ya-comedor').textContent = reg.comedor; document.getElementById('ya-fecha').textContent = reg.fecha;
+    
+    document.getElementById('ticket-bg-ya').textContent = (dni + " ").repeat(150);
+    if(window.relojTicketYa) clearInterval(window.relojTicketYa);
+    window.relojTicketYa = setInterval(() => { document.getElementById('live-clock-ya').textContent = new Date().toLocaleTimeString('es-PE'); }, 1000);
+    
+    document.getElementById('card-header').style.display = 'none'; show('sec-ya'); 
+    btn.textContent = "Continuar"; btn.disabled = false; return;
+  }
+  
+  usr = { dni, nombre: TRABAJADORES[dni].nombre, categoria: TRABAJADORES[dni].categoria, vip: TRABAJADORES[dni].vip || "" };
+  
+  if (usr.vip !== "") {
+      comedorSel = usr.vip;
+      await confirmarEleccion(true);
+      return;
+  }
+  
+  btn.textContent = "Continuar"; btn.disabled = false;
+  document.getElementById('lbl-nombre').textContent = usr.nombre; document.getElementById('lbl-dni').textContent = usr.dni;
+  document.getElementById('lbl-cat').textContent = usr.categoria;
+  const p = usr.nombre.split(' '); document.getElementById('worker-av').textContent = ((p[0]?.[0]||'') + (p[1]?.[0]||'')).toUpperCase();
+  document.getElementById('card-header').style.display = 'none'; show('sec-comedores'); suscribirConteos();
+}
+
+function esEmp(cat) { const c = (cat || '').toUpperCase(); return c === 'EMPLEADO' || c === 'PRACTICANTE'; }
+
+function suscribirConteos() {
+  if (unsubConteos) { db.ref('evento/conteos').off('value', unsubConteos); }
+  unsubConteos = db.ref('evento/conteos').on('value', snap => pintarComedores(snap.val() || {}));
+}
+
+function pintarComedores(conteos) {
+  const cont = document.getElementById('lista-comedores');
+  const disponibles = Object.entries(LIMITES).map(([nombre, max]) => {
+    const campo = esEmp(usr.categoria) ? 'empleado' : 'obrero';
+    const cupos = Math.max(0, (max[campo] || 0) - ((conteos[nombre] || {})[campo] || 0));
+    return { nombre, cupos };
+  }).filter(c => c.cupos > 0);
+  
+  if (comedorSel && !disponibles.some(c => c.nombre === comedorSel)) { activarExpulsion(comedorSel); comedorSel = ''; }
+  cont.innerHTML = '';
+  
+  if (disponibles.length === 0) {
+    cont.innerHTML = `<div class="no-cupos">No hay cupos disponibles.</div>`;
+    document.getElementById('btn-elegir').disabled = true; return;
+  }
+  
+  disponibles.forEach(c => {
+    const el = document.createElement('div'); el.className = 'comedor-item'; el.dataset.nombre = c.nombre;
+    if (c.nombre === comedorSel) el.classList.add('sel');
+    el.innerHTML = `<span class="cn">${c.nombre}</span><span class="cpill">${c.cupos} cupo${c.cupos !== 1 ? 's' : ''}</span>`;
+    el.addEventListener('click', () => {
+      detenerCountdown(); comedorSel = c.nombre;
+      document.querySelectorAll('.comedor-item').forEach(x => x.classList.toggle('sel', x.dataset.nombre === c.nombre));
+      document.getElementById('btn-elegir').disabled = false; clrErr('err-com');
+    });
+    cont.appendChild(el);
+  });
+  if (comedorSel) document.getElementById('btn-elegir').disabled = false;
+}
+
+async function confirmarEleccion(esModoVIP) {
+  if (!comedorSel || confirmando) return; 
+  confirmando = true;
+  const btn = document.getElementById('btn-elegir'); 
+  if(!esModoVIP) { 
+    btn.disabled = true; 
+    btn.textContent = 'Procesando...'; 
+    clrErr('err-com'); 
+  }
+  
+  const campo = esEmp(usr.categoria) ? 'empleado' : 'obrero'; 
+  const limite = (LIMITES[comedorSel] || {})[campo] || 0;
+  
+  try {
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), 8000));
+    
+    const transactionPromise = db.ref(`evento/conteos/${comedorSel}`).transaction(datos => {
+      const act = datos || { obrero: 0, empleado: 0 }; 
+      const uso = act[campo] || 0;
+      if (uso >= limite && !esModoVIP) return; 
+      return { ...act, [campo]: uso + 1 };
+    });
+
+    const res = await Promise.race([transactionPromise, timeoutPromise]);
+    
+    if (!res.committed && !esModoVIP) {
+      confirmando = false; 
+      activarExpulsion(comedorSel); 
+      comedorSel = ''; 
+      return;
+    }
+    
+    const ahora = new Date(); 
+    const f = ahora.toLocaleDateString('es-PE') + ' ' + ahora.toTimeString().slice(0, 8);
+    await db.ref(`evento/elecciones/${usr.dni}`).set({ 
+      nombre: usr.nombre, categoria: usr.categoria, comedor: comedorSel, fecha: f, timestamp: firebase.database.ServerValue.TIMESTAMP 
+    });
+    
+    if(!esModoVIP) { btn.textContent = 'Confirmar Elección'; }
+    if (unsubConteos) db.ref('evento/conteos').off('value', unsubConteos);
+    
+    document.getElementById('exito-comedor').textContent = comedorSel; 
+    document.getElementById('exito-nombre').textContent = usr.nombre; 
+    document.getElementById('exito-dni').textContent = usr.dni; 
+    document.getElementById('exito-cat').textContent = usr.categoria; 
+    document.getElementById('exito-hora').innerHTML = `Registrado el <strong>${f}</strong>`;
+    
+    document.getElementById('ticket-bg-exito').textContent = (usr.dni + " ").repeat(150);
+    if(window.relojTicketExito) clearInterval(window.relojTicketExito);
+    window.relojTicketExito = setInterval(() => { document.getElementById('live-clock-exito').textContent = new Date().toLocaleTimeString('es-PE'); }, 1000);
+
+    confirmando = false; 
+    show('sec-exito');
+    
+    if(esModoVIP) {
+        document.getElementById('btn-continuar').textContent = "Continuar";
+        document.getElementById('btn-continuar').disabled = false;
+        document.getElementById('card-header').style.display = 'none';
+    }
+    
+  } catch (e) { 
+    confirmando = false; 
+    if(!esModoVIP) { 
+      btn.textContent = 'Confirmar Elección'; 
+      btn.disabled = false; 
+      if (e.message === "TIMEOUT") {
+        setErr('err-com', 'La conexión está muy lenta. Vuelve a presionar Confirmar.');
+      } else {
+        setErr('err-com', 'Error de red. Intenta de nuevo.'); 
+      }
+    } else { 
+      document.getElementById('btn-continuar').textContent = "Continuar"; 
+      document.getElementById('btn-continuar').disabled = false; 
+    }
+  }
+}
+
+function activarExpulsion(c) { document.getElementById('btn-elegir').disabled = true; document.querySelectorAll('.comedor-item').forEach(el => el.classList.remove('sel')); mostrarCountdown(5, c); setErr('err-com', `"${c}" se llenó. Elige otro.`); }
+function mostrarCountdown(s, c) {
+  detenerCountdown(); document.getElementById('expulsion-msg').textContent = `"${c}" se llenó. Elige otro en:`; document.getElementById('countdown-num').textContent = s; document.getElementById('expulsion-box').style.display = 'block';
+  const ring = document.getElementById('ring-fg'); ring.style.strokeDasharray = 2 * Math.PI * 27; ring.style.strokeDashoffset = '0'; void ring.getBoundingClientRect(); ring.style.strokeDashoffset = String(2 * Math.PI * 27);
+  let r = s; timerCountdown = setInterval(() => { r--; document.getElementById('countdown-num').textContent = r; if (r <= 0) { detenerCountdown(); clrErr('err-com'); } }, 1000);
+}
+function detenerCountdown() { if (timerCountdown) clearInterval(timerCountdown); document.getElementById('expulsion-box').style.display = 'none'; }
+function regresarInicio() { if (unsubConteos) db.ref('evento/conteos').off('value', unsubConteos); detenerCountdown(); limpiarDni(); document.getElementById('card-header').style.display = ''; show('sec-dni'); }
+function volverARegistrar() { usr = { dni:'', nombre:'', categoria:'', vip:'' }; comedorSel = ''; regresarInicio(); }
+</script>
+</body>
+</html>
