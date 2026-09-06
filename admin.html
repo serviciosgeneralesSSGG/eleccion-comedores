@@ -39,7 +39,7 @@
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
     .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px} .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px} .stat-label{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px} .stat-value{font-size:28px;font-weight:700;color:var(--ink);line-height:1} .stat-sub{font-size:12px;color:var(--ink-soft);margin-top:4px}
     .comedores-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:28px} .comedor-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px} .comedor-nombre{font-size:15px;font-weight:700;margin-bottom:12px} .progress-row{margin-bottom:8px} .progress-label{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-soft);margin-bottom:4px} .progress-bar-bg{width:100%;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden} .progress-fill{height:100%;border-radius:4px;transition:width .4s} .fill-ok{background:var(--ok)} .fill-warn{background:#F59E0B} .fill-full{background:var(--accent)} .comedor-total{font-size:12px;color:var(--ink-soft);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
-    .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden} .table-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;} #search-input{padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:220px;outline:none;} #search-input:focus{border-color:var(--info);}
+    .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:24px} .table-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;} .search-input{padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:220px;outline:none;} .search-input:focus{border-color:var(--info);}
     table{width:100%;border-collapse:collapse} th{padding:10px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--ink-soft);border-bottom:1px solid var(--border)} td{padding:12px 16px;font-size:13px;border-bottom:1px solid #F1F5F9}
     .badge{padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase} .badge-obrero{background:#E2E8F0;color:var(--ink)} .badge-empleado{background:#EFF6FF;color:var(--info)}
   </style>
@@ -88,15 +88,32 @@
       <div class="stat-card"><div class="stat-label">Última actualización</div><div class="stat-value" style="font-size:16px" id="stat-hora">—</div></div>
     </div>
     <div class="comedores-grid" id="comedores-grid"></div>
+    
+    <!-- Tabla de Registrados -->
     <div class="table-wrap">
       <div class="table-header">
         <h3>Registros individuales</h3>
-        <div class="control-flex"><input type="text" id="search-input" placeholder="Buscar nombre o DNI..."><button class="btn btn-green" onclick="exportarExcel()">⬇ Descargar Excel de Resumen</button></div>
+        <div class="control-flex">
+          <input type="text" id="search-input" class="search-input" placeholder="Buscar nombre o DNI...">
+          <button class="btn btn-green" onclick="exportarExcel()">⬇ Descargar Excel de Resumen</button>
+        </div>
       </div>
-      <div style="overflow-x:auto">
+      <div style="overflow-x:auto; max-height:350px; overflow-y:auto">
         <table><thead><tr><th>#</th><th>DNI</th><th>Nombre</th><th>Categoría</th><th>Comedor</th><th>Hora</th></tr></thead><tbody id="tabla-body"></tbody></table>
       </div>
     </div>
+
+    <!-- Tabla de Faltantes (Sin Elegir) -->
+    <div class="table-wrap">
+      <div class="table-header">
+        <h3>Sin elegir (<span id="count-faltantes">0</span>)</h3>
+        <input type="text" id="search-faltantes" class="search-input" placeholder="Buscar faltante...">
+      </div>
+      <div style="overflow-x:auto; max-height:350px; overflow-y:auto">
+        <table><thead><tr><th>#</th><th>DNI</th><th>Nombre</th><th>Categoría</th></tr></thead><tbody id="tabla-faltantes"></tbody></table>
+      </div>
+    </div>
+
   </div>
 </div>
 <script src="config.js"></script>
@@ -112,6 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     else { document.getElementById('login-screen').style.display = 'flex'; document.getElementById('app-content').style.display = 'none'; }
   });
 });
+
 function iniciarSesion() { auth.signInWithEmailAndPassword(document.getElementById('txt-email').value, document.getElementById('txt-pass').value).then(() => document.getElementById('login-error').style.display='none').catch(() => document.getElementById('login-error').style.display='block'); }
 function cerrarSesion() { auth.signOut(); }
 
@@ -140,7 +158,17 @@ function iniciarPanel() {
   });
   
   db.ref('evento/elecciones').on('value', snap => actualizarElecciones(snap.val() || {}));
+  
   document.getElementById('search-input').addEventListener('input', filtrarTabla);
+  
+  document.getElementById('search-faltantes')?.addEventListener('input', () => {
+    const dnisReg = new Set(todosLosRegistros.map(r => r.dni));
+    const faltantes = Object.entries(TRABAJADORES)
+      .filter(([dni]) => !dnisReg.has(dni))
+      .map(([dni, datos]) => ({ dni, ...datos }));
+    renderizarFaltantes(faltantes);
+  });
+  
   setInterval(actualizarUIControlSistema, 10000);
 }
 
@@ -150,10 +178,9 @@ function verificarDisparoVIPs() {
     
     Object.entries(vipsPendientes).forEach(([dni, datos]) => {
         const comedor = datos.comedor;
-        const cat = (datos.categoria === 'EMPLEADO' || datos.categoria === 'PRACTICANTE') ? 'empleado' : 'obrero';
+        const cat = esEmpAdmin(datos.categoria) ? 'empleado' : 'obrero';
         const limite = (LIMITES[comedor] || {})[cat] || 0;
         const uso = (conteosActuales[comedor] || {})[cat] || 0;
-        
         const umbral = limite / 2;
         
         if (limite > 0 && uso >= umbral) {
@@ -164,29 +191,42 @@ function verificarDisparoVIPs() {
 
 async function procesarVipAutomatico(dni, datos) {
     const comedor = datos.comedor;
-    const cat = (datos.categoria === 'EMPLEADO' || datos.categoria === 'PRACTICANTE') ? 'empleado' : 'obrero';
-    
+    const cat = esEmpAdmin(datos.categoria) ? 'empleado' : 'obrero';
+    const limite = (LIMITES[comedor] || {})[cat] || 0;
+
+    const yaRegistrado = await db.ref(`evento/elecciones/${dni}`).get();
+    if (yaRegistrado.exists()) {
+        await db.ref(`evento/vips_pendientes/${dni}`).remove();
+        return;
+    }
+
     const claim = await db.ref(`evento/vips_pendientes/${dni}`).transaction(vipData => {
-        if (vipData) return null; 
-        return; 
+        if (!vipData) return; 
+        return null; 
     });
 
-    if (claim.committed) {
-        await db.ref(`evento/conteos/${comedor}`).transaction(actual => {
-            const act = actual || { obrero: 0, empleado: 0 };
-            return { ...act, [cat]: (act[cat] || 0) + 1 };
-        });
-        
-        const ahora = new Date();
-        const f = ahora.toLocaleDateString('es-PE') + ' ' + ahora.toTimeString().slice(0, 8);
-        await db.ref(`evento/elecciones/${dni}`).set({
-            nombre: datos.nombre,
-            categoria: datos.categoria,
-            comedor: comedor,
-            fecha: f,
-            timestamp: firebase.database.ServerValue.TIMESTAMP
-        });
-    }
+    if (!claim.committed) return;
+
+    await db.ref(`evento/conteos/${comedor}`).transaction(actual => {
+        const act = actual || { obrero: 0, empleado: 0 };
+        if ((act[cat] || 0) >= limite) return act; 
+        return { ...act, [cat]: (act[cat] || 0) + 1 };
+    });
+    
+    const ahora = new Date();
+    const f = ahora.toLocaleDateString('es-PE') + ' ' + ahora.toTimeString().slice(0, 8);
+    await db.ref(`evento/elecciones/${dni}`).set({
+        nombre: datos.nombre,
+        categoria: datos.categoria,
+        comedor: comedor,
+        fecha: f,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+    });
+}
+
+function esEmpAdmin(cat) {
+  const c = (cat || '').toUpperCase();
+  return c === 'EMPLEADO' || c === 'PRACTICANTE';
 }
 
 function procesarExcel() {
@@ -231,10 +271,12 @@ function evaluarEstadoActual() {
     const ahora = new Date(), fInicio = new Date(horaInicio.replace(' ', 'T')), fFin = new Date(horaFin.replace(' ', 'T'));
     return (ahora >= fInicio && ahora <= fFin);
 }
+
 function setEstadoSistema(estadoDeseado) {
     if (estadoDeseado) { if(confirm("¿Seguro que deseas HABILITAR el sistema ahora mismo?")) { db.ref('evento/datos_iniciales/sistemaForzado').set(true); } } 
     else { if(confirm("¿Seguro que deseas CERRAR el sistema ahora mismo?")) { db.ref('evento/datos_iniciales/sistemaForzado').set(false); } }
 }
+
 function actualizarUIControlSistema() {
   const activo = evaluarEstadoActual(), bdg = document.getElementById('status-display'), txt = document.getElementById('status-text'), btnAbrir = document.getElementById('btn-abrir'), btnCerrar = document.getElementById('btn-cerrar');
   if (activo) { 
@@ -247,12 +289,14 @@ function actualizarUIControlSistema() {
     btnCerrar.textContent = "✕ Está Cerrado"; btnCerrar.disabled = true; btnCerrar.style.opacity = "0.6"; btnCerrar.style.cursor = "default";
   }
 }
+
 function limpiarRegistros() { 
   if(evaluarEstadoActual()){ alert("Primero debes CERRAR el sistema para poder resetear."); return; } 
   if(prompt("Escribe 'BORRAR' para limpiar ABSOLUTAMENTE TODO:") === 'BORRAR'){
       db.ref('evento').remove().then(() => { document.getElementById('excel-file').value = ""; alert("Sistema totalmente limpio y reseteado."); });
   } 
 }
+
 function actualizarConteos(conteos) {
   const grid = document.getElementById('comedores-grid'); grid.innerHTML = '';
   Object.entries(LIMITES).forEach(([n, m]) => {
@@ -265,11 +309,43 @@ function actualizarConteos(conteos) {
     grid.appendChild(card);
   }); document.getElementById('stat-hora').textContent = new Date().toTimeString().slice(0, 8);
 }
+
 function actualizarElecciones(el) {
-  todosLosRegistros = Object.entries(el).map(([dni, r]) => ({ dni, ...r })).sort((a,b) => (b.timestamp||0)-(a.timestamp||0));
-  const t = todosLosRegistros.length, o = todosLosRegistros.filter(r=>r.categoria==='OBRERO').length;
-  document.getElementById('stat-total').textContent = t; document.getElementById('stat-obreros').textContent = o; document.getElementById('stat-empleados').textContent = t-o; filtrarTabla();
+  todosLosRegistros = Object.entries(el)
+    .map(([dni, r]) => ({ dni, ...r }))
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+  const t = todosLosRegistros.length;
+  const o = todosLosRegistros.filter(r => r.categoria === 'OBRERO').length;
+  document.getElementById('stat-total').textContent = t; 
+  document.getElementById('stat-obreros').textContent = o; 
+  document.getElementById('stat-empleados').textContent = t - o; 
+
+  // Calcular faltantes
+  const dnisRegistrados = new Set(todosLosRegistros.map(r => r.dni));
+  const faltantes = Object.entries(TRABAJADORES)
+    .filter(([dni]) => !dnisRegistrados.has(dni))
+    .map(([dni, datos]) => ({ dni, ...datos }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  document.getElementById('count-faltantes').textContent = faltantes.length;
+  renderizarFaltantes(faltantes);
+  filtrarTabla();
 }
+
+function renderizarFaltantes(lista) {
+  const q = (document.getElementById('search-faltantes')?.value || '').toLowerCase();
+  const f = q ? lista.filter(r => r.nombre?.toLowerCase().includes(q) || r.dni?.includes(q)) : lista;
+  const tb = document.getElementById('tabla-faltantes');
+  tb.innerHTML = '';
+  if(!f.length) { tb.innerHTML = `<tr><td colspan="4" class="empty">Todos han elegido</td></tr>`; return; }
+  f.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i + 1}</td><td style="font-weight:600">${r.dni}</td><td>${r.nombre || '—'}</td><td><span class="badge badge-${(r.categoria||'obrero').toLowerCase()}">${r.categoria || '—'}</span></td>`;
+    tb.appendChild(tr);
+  });
+}
+
 function filtrarTabla() {
   const q = document.getElementById('search-input').value.toLowerCase();
   const f = q ? todosLosRegistros.filter(r => r.nombre?.toLowerCase().includes(q) || r.dni?.includes(q)) : todosLosRegistros;
@@ -277,13 +353,21 @@ function filtrarTabla() {
   if(!f.length) { tb.innerHTML = `<tr><td colspan="6" class="empty">Sin registros</td></tr>`; return; }
   f.forEach((r, i) => { const tr = document.createElement('tr'); tr.innerHTML = `<td>${i+1}</td><td style="font-weight:600">${r.dni}</td><td>${r.nombre||'—'}</td><td><span class="badge badge-${(r.categoria||'').toLowerCase()}">${r.categoria||'—'}</span></td><td style="font-weight:600">${r.comedor||'—'}</td><td style="color:var(--ink-soft)">${r.fecha||'—'}</td>`; tb.appendChild(tr); });
 }
+
 function exportarExcel() {
   if (todosLosRegistros.length === 0) { alert("No hay datos para exportar."); return; }
-  const datosParaExcel = todosLosRegistros.map(r => ({"Marca temporal": r.fecha, "DNI": r.dni, "DATOS PERSONALES": r.nombre, "CATEGORIA": r.categoria, "SELECIONA EL COMEDOR": r.comedor}));
+  // Exportación limpia sin tildes
+  const datosParaExcel = todosLosRegistros.map(r => ({
+    "Fecha_Hora": r.fecha || '',
+    "DNI": r.dni || '',
+    "Nombre": r.nombre || '',
+    "Categoria": r.categoria || '',
+    "Comedor": r.comedor || ''
+  }));
   const wsRegistros = XLSX.utils.json_to_sheet(datosParaExcel);
   const totalPadron = Object.keys(TRABAJADORES).length, totalReg = todosLosRegistros.length, totalFaltantes = totalPadron - totalReg;
   const pctReg = totalPadron > 0 ? ((totalReg / totalPadron) * 100).toFixed(1) + '%' : '0%', pctFalt = totalPadron > 0 ? ((totalFaltantes / totalPadron) * 100).toFixed(1) + '%' : '0%';
-  const resumenData = [ ["ESTADÍSTICAS GENERALES DE ASISTENCIA"], [], ["ESTADO", "COMENSALES", "PORCENTAJE"], ["Total Elegidos", totalReg, pctReg], ["Total Faltantes (Sin elegir)", totalFaltantes, pctFalt], ["TOTAL EN PADRÓN", totalPadron, "100%"], [], [], ["DESGLOSE DE OCUPACIÓN POR COMEDOR"], ["COMEDOR", "CUPOS TOTALES", "CUPOS USADOS", "% DE OCUPACIÓN"] ];
+  const resumenData = [ ["ESTADISTICAS GENERALES DE ASISTENCIA"], [], ["ESTADO", "COMENSALES", "PORCENTAJE"], ["Total Elegidos", totalReg, pctReg], ["Total Faltantes (Sin elegir)", totalFaltantes, pctFalt], ["TOTAL EN PADRON", totalPadron, "100%"], [], [], ["DESGLOSE DE OCUPACION POR COMEDOR"], ["COMEDOR", "CUPOS TOTALES", "CUPOS USADOS", "% DE OCUPACION"] ];
   Object.entries(LIMITES).forEach(([nombre, limites]) => { const limTotal = (limites.obrero || 0) + (limites.empleado || 0), ocupados = todosLosRegistros.filter(r => r.comedor === nombre).length, pctOcup = limTotal > 0 ? ((ocupados / limTotal) * 100).toFixed(1) + '%' : '0%'; resumenData.push([nombre, limTotal, ocupados, pctOcup]); });
   const wsResumen = XLSX.utils.aoa_to_sheet(resumenData), workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, wsRegistros, "Registros"); XLSX.utils.book_append_sheet(workbook, wsResumen, "Resumen y Porcentajes");

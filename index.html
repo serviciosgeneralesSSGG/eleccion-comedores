@@ -258,7 +258,6 @@ async function validarTrabajador() {
   
   usr = { dni, nombre: TRABAJADORES[dni].nombre, categoria: TRABAJADORES[dni].categoria, vip: TRABAJADORES[dni].vip || "" };
   
-  // Si el VIP se mete a la app manualmente ANTES de llegar al 50%, le limpiamos su espacio
   if (usr.vip !== "") {
       comedorSel = usr.vip.trim();
       await confirmarEleccion(true);
@@ -280,7 +279,7 @@ function suscribirConteos() {
 }
 
 function pintarComedores(conteos) {
-  if (confirmando) return; // Congela la pantalla si ya está procesando
+  if (confirmando) return; 
   
   const cont = document.getElementById('lista-comedores');
   const disponibles = Object.entries(LIMITES).map(([nombre, max]) => {
@@ -315,7 +314,7 @@ async function confirmarEleccion(esModoVIP) {
   if (!comedorSel || confirmando) return; 
   confirmando = true;
   
-  const comedorElegido = comedorSel; // Bóveda de protección
+  const comedorElegido = comedorSel; 
   const btn = document.getElementById('btn-elegir'); 
   
   if(!esModoVIP) { 
@@ -333,13 +332,17 @@ async function confirmarEleccion(esModoVIP) {
     const transactionPromise = db.ref(`evento/conteos/${comedorElegido}`).transaction(datos => {
       const act = datos || { obrero: 0, empleado: 0 }; 
       const uso = act[campo] || 0;
-      if (uso >= limite && !esModoVIP) return; 
+      
+      // FIX 3: Los VIP ahora también respetan el límite al entrar manualmente.
+      if (uso >= limite) return; 
+      
       return { ...act, [campo]: uso + 1 };
     });
 
     const res = await Promise.race([transactionPromise, timeoutPromise]);
     
-    if (!res.committed && !esModoVIP) {
+    // Si la base de datos rebotó la transacción porque ya no había cupo
+    if (!res.committed) {
       confirmando = false; 
       activarExpulsion(comedorElegido); 
       comedorSel = ''; 
@@ -353,7 +356,6 @@ async function confirmarEleccion(esModoVIP) {
       nombre: usr.nombre, categoria: usr.categoria, comedor: comedorElegido, fecha: f, timestamp: firebase.database.ServerValue.TIMESTAMP 
     });
     
-    // Si el VIP se mete manualmente a la app, el sistema le borra su cupo pendiente para que el Panel de Control no lo duplique
     if (esModoVIP) {
         await db.ref(`evento/vips_pendientes/${usr.dni}`).remove();
     }
@@ -405,8 +407,26 @@ function mostrarCountdown(s, c) {
   let r = s; timerCountdown = setInterval(() => { r--; document.getElementById('countdown-num').textContent = r; if (r <= 0) { detenerCountdown(); clrErr('err-com'); } }, 1000);
 }
 function detenerCountdown() { if (timerCountdown) clearInterval(timerCountdown); document.getElementById('expulsion-box').style.display = 'none'; }
-function regresarInicio() { if (unsubConteos) db.ref('evento/conteos').off('value', unsubConteos); detenerCountdown(); limpiarDni(); document.getElementById('card-header').style.display = ''; show('sec-dni'); }
-function volverARegistrar() { usr = { dni:'', nombre:'', categoria:'', vip:'' }; comedorSel = ''; regresarInicio(); }
+
+// FIX: Limpieza exhaustiva de timers para no saturar memoria RAM
+function regresarInicio() { 
+  if (unsubConteos) db.ref('evento/conteos').off('value', unsubConteos); 
+  detenerCountdown(); 
+  
+  if (window.relojTicketYa) { clearInterval(window.relojTicketYa); window.relojTicketYa = null; }
+  if (window.relojTicketExito) { clearInterval(window.relojTicketExito); window.relojTicketExito = null; }
+  
+  limpiarDni(); 
+  document.getElementById('card-header').style.display = ''; 
+  show('sec-dni'); 
+}
+
+function volverARegistrar() { 
+  usr = { dni:'', nombre:'', categoria:'', vip:'' }; 
+  comedorSel = ''; 
+  confirmando = false;
+  regresarInicio(); 
+}
 </script>
 </body>
 </html>
