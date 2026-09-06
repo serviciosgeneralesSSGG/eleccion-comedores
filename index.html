@@ -303,11 +303,16 @@ function pintarComedores(conteos) {
     const el = document.createElement('div'); el.className = 'comedor-item'; el.dataset.nombre = c.nombre;
     if (c.nombre === comedorSel) el.classList.add('sel');
     el.innerHTML = `<span class="cn">${c.nombre}</span><span class="cpill">${c.cupos} cupo${c.cupos !== 1 ? 's' : ''}</span>`;
+    
     el.addEventListener('click', () => {
+      // CANDADO: Evita clics fantasma mientras procesa
+      if (confirmando) return; 
+      
       detenerCountdown(); comedorSel = c.nombre;
       document.querySelectorAll('.comedor-item').forEach(x => x.classList.toggle('sel', x.dataset.nombre === c.nombre));
       document.getElementById('btn-elegir').disabled = false; clrErr('err-com');
     });
+    
     cont.appendChild(el);
   });
   if (comedorSel) document.getElementById('btn-elegir').disabled = false;
@@ -319,15 +324,14 @@ async function confirmarEleccion(esModoVIP) {
   
   const comedorElegido = comedorSel; 
   const btn = document.getElementById('btn-elegir'); 
+  const campo = esEmp(usr.categoria) ? 'empleado' : 'obrero'; 
+  const limite = (LIMITES[comedorElegido] || {})[campo] || 0;
   
   if(!esModoVIP) { 
     btn.disabled = true; 
     btn.textContent = 'Procesando...'; 
     clrErr('err-com'); 
   }
-  
-  const campo = esEmp(usr.categoria) ? 'empleado' : 'obrero'; 
-  const limite = (LIMITES[comedorElegido] || {})[campo] || 0;
   
   try {
     const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), 8000));
@@ -336,7 +340,7 @@ async function confirmarEleccion(esModoVIP) {
       const act = datos || { obrero: 0, empleado: 0 }; 
       const uso = act[campo] || 0;
       
-      if (uso >= limite) return; 
+      if (uso >= limite) return; // aborta si ya está lleno
       
       return { ...act, [campo]: uso + 1 };
     });
@@ -344,14 +348,12 @@ async function confirmarEleccion(esModoVIP) {
     const res = await Promise.race([transactionPromise, timeoutPromise]);
     
     if (!res.committed) {
-      confirmando = false; 
-      if (!esModoVIP) {
-          btn.textContent = 'Confirmar Elección'; 
-      }
-      activarExpulsion(comedorElegido); 
-      comedorSel = ''; 
-      pintarComedores(window.ultimoSnapConteos || {}); 
-      return;
+      // BORRADOR FORZOSO: Simulamos localmente que el comedor se llenó para que desaparezca al instante.
+      if (!window.ultimoSnapConteos) window.ultimoSnapConteos = {};
+      if (!window.ultimoSnapConteos[comedorElegido]) window.ultimoSnapConteos[comedorElegido] = {};
+      window.ultimoSnapConteos[comedorElegido][campo] = limite; 
+      
+      throw new Error("FULL");
     }
     
     const ahora = new Date(); 
@@ -390,18 +392,31 @@ async function confirmarEleccion(esModoVIP) {
     
   } catch (e) { 
     confirmando = false; 
+    
     if(!esModoVIP) { 
       btn.textContent = 'Confirmar Elección'; 
-      if (comedorSel) btn.disabled = false;
-      if (e.message === "TIMEOUT") {
-        setErr('err-com', 'La conexión está lenta. Vuelve a presionar Confirmar.');
+      btn.disabled = true; 
+      
+      if (e.message === "FULL") {
+         activarExpulsion(comedorElegido);
+      } else if (e.message === "TIMEOUT") {
+         setErr('err-com', 'La conexión está lenta. Vuelve a presionar Confirmar.');
+         if (comedorSel) btn.disabled = false;
       } else {
-        setErr('err-com', 'Error de red. Intenta de nuevo.'); 
+         setErr('err-com', 'Error de red. Intenta de nuevo.'); 
+         if (comedorSel) btn.disabled = false;
       }
+      
+      comedorSel = ''; 
       pintarComedores(window.ultimoSnapConteos || {}); 
     } else { 
       document.getElementById('btn-continuar').textContent = "Continuar"; 
       document.getElementById('btn-continuar').disabled = false; 
+      if (e.message === "FULL") {
+          setErr('err-dni', `El comedor VIP asignado "${comedorElegido}" ya no tiene cupos.`);
+      } else {
+          setErr('err-dni', 'Error de red al procesar VIP.');
+      }
     }
   }
 }
