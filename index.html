@@ -275,7 +275,10 @@ function esEmp(cat) { const c = (cat || '').toUpperCase(); return c === 'EMPLEAD
 
 function suscribirConteos() {
   if (unsubConteos) { db.ref('evento/conteos').off('value', unsubConteos); }
-  unsubConteos = db.ref('evento/conteos').on('value', snap => pintarComedores(snap.val() || {}));
+  unsubConteos = db.ref('evento/conteos').on('value', snap => {
+    window.ultimoSnapConteos = snap.val() || {}; 
+    pintarComedores(window.ultimoSnapConteos);
+  });
 }
 
 function pintarComedores(conteos) {
@@ -333,7 +336,6 @@ async function confirmarEleccion(esModoVIP) {
       const act = datos || { obrero: 0, empleado: 0 }; 
       const uso = act[campo] || 0;
       
-      // FIX 3: Los VIP ahora también respetan el límite al entrar manualmente.
       if (uso >= limite) return; 
       
       return { ...act, [campo]: uso + 1 };
@@ -341,11 +343,14 @@ async function confirmarEleccion(esModoVIP) {
 
     const res = await Promise.race([transactionPromise, timeoutPromise]);
     
-    // Si la base de datos rebotó la transacción porque ya no había cupo
     if (!res.committed) {
       confirmando = false; 
+      if (!esModoVIP) {
+          btn.textContent = 'Confirmar Elección'; 
+      }
       activarExpulsion(comedorElegido); 
       comedorSel = ''; 
+      pintarComedores(window.ultimoSnapConteos || {}); 
       return;
     }
     
@@ -387,12 +392,13 @@ async function confirmarEleccion(esModoVIP) {
     confirmando = false; 
     if(!esModoVIP) { 
       btn.textContent = 'Confirmar Elección'; 
-      btn.disabled = false; 
+      if (comedorSel) btn.disabled = false;
       if (e.message === "TIMEOUT") {
         setErr('err-com', 'La conexión está lenta. Vuelve a presionar Confirmar.');
       } else {
         setErr('err-com', 'Error de red. Intenta de nuevo.'); 
       }
+      pintarComedores(window.ultimoSnapConteos || {}); 
     } else { 
       document.getElementById('btn-continuar').textContent = "Continuar"; 
       document.getElementById('btn-continuar').disabled = false; 
@@ -408,7 +414,6 @@ function mostrarCountdown(s, c) {
 }
 function detenerCountdown() { if (timerCountdown) clearInterval(timerCountdown); document.getElementById('expulsion-box').style.display = 'none'; }
 
-// FIX: Limpieza exhaustiva de timers para no saturar memoria RAM
 function regresarInicio() { 
   if (unsubConteos) db.ref('evento/conteos').off('value', unsubConteos); 
   detenerCountdown(); 
