@@ -162,7 +162,6 @@
       transform:translate(-50%,-50%);font-family:'Montserrat',sans-serif;
       font-size:22px;font-weight:800;color:var(--warn-text)}
 
-    /* Módulo de consulta */
     .consulta-box{margin-top:24px;padding-top:20px;border-top:1px solid var(--border)}
     .consulta-title{display:block;font-size:12px;font-weight:700;
       letter-spacing:.5px;text-transform:uppercase;color:var(--ink-soft);
@@ -227,7 +226,7 @@
           </div>
           <button id="btn-consultar" class="btn-consultar"
             onclick="consultarTicketCerrado()" disabled>
-            Consultar mi Ticket
+            Consultar
           </button>
           <div id="err-consulta" class="alert err">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
@@ -456,7 +455,7 @@ function cargarSistema() {
       if (!abierto) {
         document.getElementById('msg-cerrado').textContent =
           data.mensajeSistema ||
-          "El turno de elección ha finalizado por orden de Administración.";
+          "El acceso al sistema se encuentra temporalmente inactivo. Por favor, manténgase atento a los canales oficiales de comunicación, donde se informará oportunamente el horario de apertura para la selección de su comedor.";
 
         const viendoTicket =
           document.getElementById('sec-exito').classList.contains('on') ||
@@ -565,7 +564,7 @@ async function consultarTicketCerrado() {
     setErr('err-consulta', 'Error de red al consultar. Intenta de nuevo.');
   }
 
-  btn.textContent = 'Consultar mi Ticket';
+  btn.textContent = 'Consultar';
   btn.disabled    = false;
 }
 
@@ -638,6 +637,7 @@ async function validarTrabajador() {
     suscribirConteos();
 
   } catch (e) {
+    console.error('validarTrabajador error:', e);
     setErr('err-dni', 'Error de conexión. Intenta de nuevo.');
     btn.textContent = 'Continuar';
     btn.disabled    = false;
