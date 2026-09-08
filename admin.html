@@ -119,7 +119,7 @@
 <script src="config.js"></script>
 <script>
 let db, auth, LIMITES = {}, TRABAJADORES = {}, todosLosRegistros = [], sistemaForzado = null, horaInicio = "", horaFin = "";
-let vipsPendientes = {}, conteosActuales = {};
+let vipsPendientes = {}, conteosActuales = {}, ELECCIONES_ACTUALES = {};
 
 document.addEventListener('DOMContentLoaded', () => {
   if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
@@ -136,14 +136,24 @@ function cerrarSesion() { auth.signOut(); }
 function iniciarPanel() {
   db.ref('evento/datos_iniciales').on('value', snap => {
     const data = snap.val() || {}; 
-    TRABAJADORES = data.trabajadores || {}; LIMITES = data.limites || {};
+    LIMITES = data.limites || {};
     horaInicio = data.horaInicio || ""; horaFin = data.horaFin || "";
     sistemaForzado = data.sistemaForzado !== undefined ? data.sistemaForzado : null;
-    document.getElementById('stat-padron').textContent = Object.keys(TRABAJADORES).length;
-    if(horaInicio && horaFin) { document.getElementById('info-horario').textContent = `Programado para abrir: ${horaInicio} a ${horaFin}`; } 
+    
+    let txtIni = data.horaInicioTxt || horaInicio;
+    let txtFin = data.horaFinTxt || horaFin;
+
+    if(txtIni && txtFin) { document.getElementById('info-horario').textContent = `Programado para abrir: ${txtIni} a ${txtFin}`; } 
     else { document.getElementById('info-horario').textContent = "Sube un Excel para configurar el nuevo turno."; }
     actualizarUIControlSistema();
     actualizarConteos(conteosActuales);
+  });
+
+  // SEPARACIÓN DE NODOS: El admin carga los trabajadores aparte para las tablas
+  db.ref('evento/trabajadores').on('value', snap => {
+    TRABAJADORES = snap.val() || {};
+    document.getElementById('stat-padron').textContent = Object.keys(TRABAJADORES).length;
+    actualizarElecciones(ELECCIONES_ACTUALES);
   });
   
   db.ref('evento/vips_pendientes').on('value', snap => {
@@ -157,7 +167,10 @@ function iniciarPanel() {
     verificarDisparoVIPs(); 
   });
   
-  db.ref('evento/elecciones').on('value', snap => actualizarElecciones(snap.val() || {}));
+  db.ref('evento/elecciones').on('value', snap => {
+    ELECCIONES_ACTUALES = snap.val() || {};
+    actualizarElecciones(ELECCIONES_ACTUALES);
+  });
   
   document.getElementById('search-input').addEventListener('input', filtrarTabla);
   
@@ -229,18 +242,56 @@ function esEmpAdmin(cat) {
   return c === 'EMPLEADO' || c === 'PRACTICANTE';
 }
 
+function convertirFechaExcelAISO(fechaStr) {
+    if (!fechaStr) return "";
+    let partes = fechaStr.trim().replace(/\s+/g, ' ').split(" ");
+    if (partes.length < 2) return fechaStr; 
+    let fecha = partes[0].split(/[/-]/);
+    let horaStr = partes[1].split(":");
+    let ampm = partes[2] ? partes[2].toUpperCase() : "";
+    
+    if (fecha.length === 3) {
+        let dia = fecha[0]; let mes = fecha[1]; let anio = fecha[2];
+        if (dia.length === 4) { anio = fecha[0]; dia = fecha[2]; }
+        dia = dia.padStart(2, '0'); mes = mes.padStart(2, '0');
+        if (anio.length === 2) anio = "20" + anio;
+        
+        let hr = parseInt(horaStr[0], 10);
+        let min = (horaStr[1] || "00").padStart(2, '0');
+        
+        if (ampm === "PM" && hr < 12) hr += 12;
+        if (ampm === "AM" && hr === 12) hr = 0;
+        
+        let hrStr = hr.toString().padStart(2, '0');
+        return `${anio}-${mes}-${dia}T${hrStr}:${min}:00`;
+    }
+    return fechaStr;
+}
+
 function procesarExcel() {
   const file = document.getElementById('excel-file').files[0]; if (!file) { alert("Selecciona un Excel."); return; }
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
       const wb = XLSX.read(new Uint8Array(e.target.result), {type: 'array', cellDates: true, dateNF: 'yyyy-mm-dd hh:mm'}); 
-      let lim = {}, trab = {}, hInicio = "", hFin = "";
+      let trab = {}, lim = {};
       let preVips = {}; 
+      
+      let hInicioTxt = "", hFinTxt = "";
+      let isoInicio = "", isoFin = "";
       
       if (wb.Sheets['CONFIGURACION']) {
         const filasConf = XLSX.utils.sheet_to_json(wb.Sheets['CONFIGURACION'], {header: 1, raw: false});
-        filasConf.forEach(f => { if(f[0] === 'INICIO' && f[1]) hInicio = String(f[1]).trim(); if(f[0] === 'FIN' && f[1]) hFin = String(f[1]).trim(); });
+        filasConf.forEach(f => { 
+            if(f[0] === 'INICIO' && f[1]) {
+                hInicioTxt = String(f[1]).trim();
+                isoInicio = convertirFechaExcelAISO(hInicioTxt);
+            }
+            if(f[0] === 'FIN' && f[1]) {
+                hFinTxt = String(f[1]).trim();
+                isoFin = convertirFechaExcelAISO(hFinTxt);
+            }
+        });
       }
       if (wb.Sheets['COMEDORES']) { XLSX.utils.sheet_to_json(wb.Sheets['COMEDORES'], {header: 1}).slice(1).forEach(f => { if(f[0]) lim[String(f[0]).trim()] = {obrero: parseInt(f[1])||0, empleado: parseInt(f[2])||0}; }); }
       if (wb.Sheets['TRABAJADORES']) { XLSX.utils.sheet_to_json(wb.Sheets['TRABAJADORES'], {header: 1}).slice(1).forEach(f => { 
@@ -256,10 +307,19 @@ function procesarExcel() {
       }); }
       
       let updates = {};
-      updates['evento/datos_iniciales'] = { limites: lim, trabajadores: trab, horaInicio: hInicio, horaFin: hFin, sistemaForzado: null };
+      // SEPARACIÓN DE NODOS: Trabajadores ya NO están en datos_iniciales
+      updates['evento/datos_iniciales'] = { 
+          limites: lim, 
+          horaInicio: isoInicio, 
+          horaFin: isoFin, 
+          horaInicioTxt: hInicioTxt,
+          horaFinTxt: hFinTxt,
+          sistemaForzado: null 
+      };
+      updates['evento/trabajadores'] = trab; // Padron en su propio nodo
       updates['evento/vips_pendientes'] = preVips; 
       
-      db.ref().update(updates).then(() => alert("Archivo Excel control de comensales cargado."));
+      db.ref().update(updates).then(() => alert("Archivo Excel procesado. Base de datos hiper-optimizada."));
     } catch (er) { alert("Error al leer Excel. Asegura que tenga las 3 pestañas."); }
   }; reader.readAsArrayBuffer(file);
 }
@@ -268,7 +328,9 @@ function evaluarEstadoActual() {
     if (sistemaForzado === true) return true;
     if (sistemaForzado === false) return false;
     if (!horaInicio || !horaFin) return false;
-    const ahora = new Date(), fInicio = new Date(horaInicio.replace(' ', 'T')), fFin = new Date(horaFin.replace(' ', 'T'));
+    const ahora = new Date();
+    const fInicio = new Date(horaInicio);
+    const fFin = new Date(horaFin);
     return (ahora >= fInicio && ahora <= fFin);
 }
 
@@ -321,7 +383,6 @@ function actualizarElecciones(el) {
   document.getElementById('stat-obreros').textContent = o; 
   document.getElementById('stat-empleados').textContent = t - o; 
 
-  // Calcular faltantes
   const dnisRegistrados = new Set(todosLosRegistros.map(r => r.dni));
   const faltantes = Object.entries(TRABAJADORES)
     .filter(([dni]) => !dnisRegistrados.has(dni))
@@ -355,22 +416,33 @@ function filtrarTabla() {
 }
 
 function exportarExcel() {
-  if (todosLosRegistros.length === 0) { alert("No hay datos para exportar."); return; }
-  // Exportación limpia sin tildes
-  const datosParaExcel = todosLosRegistros.map(r => ({
-    "Fecha_Hora": r.fecha || '',
-    "DNI": r.dni || '',
-    "Nombre": r.nombre || '',
-    "Categoria": r.categoria || '',
-    "Comedor": r.comedor || ''
-  }));
+  if (todosLosRegistros.length === 0 && Object.keys(TRABAJADORES).length === 0) { alert("No hay datos para exportar."); return; }
+  const datosParaExcel = todosLosRegistros.map(r => ({ "Fecha_Hora": r.fecha || '', "DNI": r.dni || '', "Nombre": r.nombre || '', "Categoria": r.categoria || '', "Comedor": r.comedor || '' }));
   const wsRegistros = XLSX.utils.json_to_sheet(datosParaExcel);
-  const totalPadron = Object.keys(TRABAJADORES).length, totalReg = todosLosRegistros.length, totalFaltantes = totalPadron - totalReg;
-  const pctReg = totalPadron > 0 ? ((totalReg / totalPadron) * 100).toFixed(1) + '%' : '0%', pctFalt = totalPadron > 0 ? ((totalFaltantes / totalPadron) * 100).toFixed(1) + '%' : '0%';
+  
+  const dnisRegistrados = new Set(todosLosRegistros.map(r => r.dni));
+  const faltantes = Object.entries(TRABAJADORES).filter(([dni]) => !dnisRegistrados.has(dni)).map(([dni, datos]) => ({ "DNI": dni, "Nombre": datos.nombre || '', "Categoria": datos.categoria || '', "Estado": "SIN ELEGIR" })).sort((a, b) => a.Nombre.localeCompare(b.Nombre));
+  const wsFaltantes = XLSX.utils.json_to_sheet(faltantes);
+
+  const totalPadron = Object.keys(TRABAJADORES).length;
+  const totalReg = todosLosRegistros.length; 
+  const totalFaltantes = totalPadron - totalReg;
+  const pctReg = totalPadron > 0 ? ((totalReg / totalPadron) * 100).toFixed(1) + '%' : '0%';
+  const pctFalt = totalPadron > 0 ? ((totalFaltantes / totalPadron) * 100).toFixed(1) + '%' : '0%';
+  
   const resumenData = [ ["ESTADISTICAS GENERALES DE ASISTENCIA"], [], ["ESTADO", "COMENSALES", "PORCENTAJE"], ["Total Elegidos", totalReg, pctReg], ["Total Faltantes (Sin elegir)", totalFaltantes, pctFalt], ["TOTAL EN PADRON", totalPadron, "100%"], [], [], ["DESGLOSE DE OCUPACION POR COMEDOR"], ["COMEDOR", "CUPOS TOTALES", "CUPOS USADOS", "% DE OCUPACION"] ];
-  Object.entries(LIMITES).forEach(([nombre, limites]) => { const limTotal = (limites.obrero || 0) + (limites.empleado || 0), ocupados = todosLosRegistros.filter(r => r.comedor === nombre).length, pctOcup = limTotal > 0 ? ((ocupados / limTotal) * 100).toFixed(1) + '%' : '0%'; resumenData.push([nombre, limTotal, ocupados, pctOcup]); });
-  const wsResumen = XLSX.utils.aoa_to_sheet(resumenData), workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, wsRegistros, "Registros"); XLSX.utils.book_append_sheet(workbook, wsResumen, "Resumen y Porcentajes");
+  Object.entries(LIMITES).forEach(([nombre, limites]) => { 
+    const limTotal = (limites.obrero || 0) + (limites.empleado || 0);
+    const ocupados = todosLosRegistros.filter(r => r.comedor === nombre).length;
+    const pctOcup = limTotal > 0 ? ((ocupados / limTotal) * 100).toFixed(1) + '%' : '0%'; 
+    resumenData.push([nombre, limTotal, ocupados, pctOcup]); 
+  });
+  
+  const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, wsRegistros, "Registros");
+  XLSX.utils.book_append_sheet(workbook, wsFaltantes, "Sin Elegir"); 
+  XLSX.utils.book_append_sheet(workbook, wsResumen, "Resumen y Porcentajes");
   XLSX.writeFile(workbook, `Resumen_Comedores_${new Date().toLocaleDateString('es-PE').replace(/\//g,'-')}.xlsx`);
 }
 </script>
