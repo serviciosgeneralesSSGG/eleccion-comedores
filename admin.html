@@ -77,6 +77,10 @@
         <div class="control-flex">
           <button id="btn-abrir" class="btn btn-green" onclick="setEstadoSistema(true)">¿Quieres Habilitar?</button>
           <button id="btn-cerrar" class="btn btn-red" onclick="setEstadoSistema(false)">✕ Está Cerrado</button>
+          
+          <!-- BOTÓN PARA SINCRONIZAR LOS CUPOS -->
+          <button class="btn btn-blue" onclick="forzarSincronizacionConteos()">Actualizar</button>
+          
           <button class="btn" style="background:#0F172A; color:#fff; margin-left:auto;" onclick="limpiarRegistros()">Resetear Todo (Limpiar)</button>
         </div>
       </div>
@@ -119,7 +123,7 @@
 <script src="config.js"></script>
 <script>
 let db, auth, LIMITES = {}, TRABAJADORES = {}, todosLosRegistros = [], sistemaForzado = null, horaInicio = "", horaFin = "";
-let vipsPendientes = {}, conteosActuales = {}, ELECCIONES_ACTUALES = {};
+let vipsPendientes = {}, ELECCIONES_ACTUALES = {};
 
 document.addEventListener('DOMContentLoaded', () => {
   if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
@@ -146,7 +150,6 @@ function iniciarPanel() {
     if(txtIni && txtFin) { document.getElementById('info-horario').textContent = `Programado para abrir: ${txtIni} a ${txtFin}`; } 
     else { document.getElementById('info-horario').textContent = "Sube un Excel para configurar el nuevo turno."; }
     actualizarUIControlSistema();
-    actualizarConteos(conteosActuales);
   });
 
   db.ref('evento/trabajadores').on('value', snap => {
@@ -160,15 +163,10 @@ function iniciarPanel() {
     verificarDisparoVIPs();
   });
   
-  db.ref('evento/conteos').on('value', snap => {
-    conteosActuales = snap.val() || {};
-    actualizarConteos(conteosActuales);
-    verificarDisparoVIPs(); 
-  });
-  
   db.ref('evento/elecciones').on('value', snap => {
     ELECCIONES_ACTUALES = snap.val() || {};
     actualizarElecciones(ELECCIONES_ACTUALES);
+    verificarDisparoVIPs(); 
   });
   
   document.getElementById('search-input').addEventListener('input', filtrarTabla);
@@ -184,30 +182,58 @@ function iniciarPanel() {
   setInterval(actualizarUIControlSistema, 10000);
 }
 
+function calcularConteosReales(elecciones) {
+    let reales = {};
+    Object.values(elecciones).forEach(r => {
+        let com = r.comedor;
+        let cat = esEmpAdmin(r.categoria) ? 'empleado' : 'obrero';
+        if (!reales[com]) reales[com] = { obrero: 0, empleado: 0 };
+        reales[com][cat]++;
+    });
+    return reales;
+}
+
+function forzarSincronizacionConteos() {
+    if(confirm("Esto calculará los cupos EXACTOS basados en las personas registradas, eliminando los cupos fantasma en los celulares de los operarios. ¿Proceder?")) {
+        let reales = calcularConteosReales(ELECCIONES_ACTUALES);
+        db.ref('evento/conteos').set(reales).then(() => {
+            alert("Cupos sincronizados correctamente. Los operarios ya ven la disponibilidad real.");
+        }).catch(err => alert("Hubo un error al sincronizar."));
+    }
+}
+
 function verificarDisparoVIPs() {
     if (!vipsPendientes || Object.keys(vipsPendientes).length === 0) return;
     if (!LIMITES || Object.keys(LIMITES).length === 0) return;
     
+    let conteosReales = calcularConteosReales(ELECCIONES_ACTUALES);
+    
     Object.entries(vipsPendientes).forEach(([dni, datos]) => {
         const comedor = datos.comedor;
         const cat = esEmpAdmin(datos.categoria) ? 'empleado' : 'obrero';
+        
         const limite = (LIMITES[comedor] || {})[cat] || 0;
-        const uso = (conteosActuales[comedor] || {})[cat] || 0;
+        const usoReal = (conteosReales[comedor] || {})[cat] || 0;
         const umbral = limite / 2;
         
-        if (limite > 0 && uso >= umbral) {
-            procesarVipAutomatico(dni, datos);
+        if (limite > 0 && usoReal >= umbral && usoReal < limite) {
+            procesarVipAutomatico(dni, datos, cat, limite, usoReal);
         }
     });
 }
 
-async function procesarVipAutomatico(dni, datos) {
+async function procesarVipAutomatico(dni, datos, cat, limite, usoReal) {
     const comedor = datos.comedor;
-    const cat = esEmpAdmin(datos.categoria) ? 'empleado' : 'obrero';
-    const limite = (LIMITES[comedor] || {})[cat] || 0;
 
     const yaRegistrado = await db.ref(`evento/elecciones/${dni}`).get();
     if (yaRegistrado.exists()) {
+        await db.ref(`evento/vips_pendientes/${dni}`).remove();
+        return;
+    }
+
+    const snapReales = await db.ref('evento/elecciones').get();
+    let realesFrescos = calcularConteosReales(snapReales.val() || {});
+    if (((realesFrescos[comedor] || {})[cat] || 0) >= limite) {
         await db.ref(`evento/vips_pendientes/${dni}`).remove();
         return;
     }
@@ -357,10 +383,10 @@ function limpiarRegistros() {
   } 
 }
 
-function actualizarConteos(conteos) {
+function actualizarConteos(conteosReales) {
   const grid = document.getElementById('comedores-grid'); grid.innerHTML = '';
   Object.entries(LIMITES).forEach(([n, m]) => {
-    const d = conteos[n]||{}, uO = d.obrero||0, uE = d.empleado||0, lO = m.obrero||0, lE = m.empleado||0, t = uO+uE, lT = lO+lE, p = lT>0?Math.round(t/lT*100):0, c = p>=100?'fill-full':p>=80?'fill-warn':'fill-ok';
+    const d = conteosReales[n]||{}, uO = d.obrero||0, uE = d.empleado||0, lO = m.obrero||0, lE = m.empleado||0, t = uO+uE, lT = lO+lE, p = lT>0?Math.round(t/lT*100):0, c = p>=100?'fill-full':p>=80?'fill-warn':'fill-ok';
     const card = document.createElement('div'); card.className = 'comedor-card';
     card.innerHTML = `<div class="comedor-nombre">${n}</div>
       <div class="progress-row"><div class="progress-label"><span>Obreros</span><span>${uO} / ${lO}</span></div><div class="progress-bar-bg"><div class="progress-fill fill-ok" style="width:${lO>0?Math.min(100,uO/lO*100):0}%"></div></div></div>
@@ -390,6 +416,9 @@ function actualizarElecciones(el) {
   document.getElementById('count-faltantes').textContent = faltantes.length;
   renderizarFaltantes(faltantes);
   filtrarTabla();
+
+  let reales = calcularConteosReales(el);
+  actualizarConteos(reales);
 }
 
 function renderizarFaltantes(lista) {
