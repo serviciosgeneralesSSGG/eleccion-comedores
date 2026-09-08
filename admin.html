@@ -149,7 +149,6 @@ function iniciarPanel() {
     actualizarConteos(conteosActuales);
   });
 
-  // SEPARACIÓN DE NODOS: El admin carga los trabajadores aparte para las tablas
   db.ref('evento/trabajadores').on('value', snap => {
     TRABAJADORES = snap.val() || {};
     document.getElementById('stat-padron').textContent = Object.keys(TRABAJADORES).length;
@@ -307,7 +306,6 @@ function procesarExcel() {
       }); }
       
       let updates = {};
-      // SEPARACIÓN DE NODOS: Trabajadores ya NO están en datos_iniciales
       updates['evento/datos_iniciales'] = { 
           limites: lim, 
           horaInicio: isoInicio, 
@@ -316,7 +314,7 @@ function procesarExcel() {
           horaFinTxt: hFinTxt,
           sistemaForzado: null 
       };
-      updates['evento/trabajadores'] = trab; // Padron en su propio nodo
+      updates['evento/trabajadores'] = trab; 
       updates['evento/vips_pendientes'] = preVips; 
       
       db.ref().update(updates).then(() => alert("Archivo Excel procesado. Base de datos hiper-optimizada."));
@@ -417,11 +415,26 @@ function filtrarTabla() {
 
 function exportarExcel() {
   if (todosLosRegistros.length === 0 && Object.keys(TRABAJADORES).length === 0) { alert("No hay datos para exportar."); return; }
-  const datosParaExcel = todosLosRegistros.map(r => ({ "Fecha_Hora": r.fecha || '', "DNI": r.dni || '', "Nombre": r.nombre || '', "Categoria": r.categoria || '', "Comedor": r.comedor || '' }));
+  
+  const datosParaExcel = todosLosRegistros.map(r => ({
+    "Fecha_Hora": r.fecha || '',
+    "DNI": r.dni || '',
+    "Nombre": r.nombre || '',
+    "Categoria": r.categoria || '',
+    "Comedor": r.comedor || ''
+  }));
   const wsRegistros = XLSX.utils.json_to_sheet(datosParaExcel);
   
   const dnisRegistrados = new Set(todosLosRegistros.map(r => r.dni));
-  const faltantes = Object.entries(TRABAJADORES).filter(([dni]) => !dnisRegistrados.has(dni)).map(([dni, datos]) => ({ "DNI": dni, "Nombre": datos.nombre || '', "Categoria": datos.categoria || '', "Estado": "SIN ELEGIR" })).sort((a, b) => a.Nombre.localeCompare(b.Nombre));
+  const faltantes = Object.entries(TRABAJADORES)
+    .filter(([dni]) => !dnisRegistrados.has(dni))
+    .map(([dni, datos]) => ({
+      "DNI": dni,
+      "Nombre": datos.nombre || '',
+      "Categoria": datos.categoria || '',
+      "Estado": "SIN ELEGIR"
+    }))
+    .sort((a, b) => a.Nombre.localeCompare(b.Nombre));
   const wsFaltantes = XLSX.utils.json_to_sheet(faltantes);
 
   const totalPadron = Object.keys(TRABAJADORES).length;
@@ -430,7 +443,22 @@ function exportarExcel() {
   const pctReg = totalPadron > 0 ? ((totalReg / totalPadron) * 100).toFixed(1) + '%' : '0%';
   const pctFalt = totalPadron > 0 ? ((totalFaltantes / totalPadron) * 100).toFixed(1) + '%' : '0%';
   
-  const resumenData = [ ["ESTADISTICAS GENERALES DE ASISTENCIA"], [], ["ESTADO", "COMENSALES", "PORCENTAJE"], ["Total Elegidos", totalReg, pctReg], ["Total Faltantes (Sin elegir)", totalFaltantes, pctFalt], ["TOTAL EN PADRON", totalPadron, "100%"], [], [], ["DESGLOSE DE OCUPACION POR COMEDOR"], ["COMEDOR", "CUPOS TOTALES", "CUPOS USADOS", "% DE OCUPACION"] ];
+  const textoHorario = document.getElementById('info-horario').textContent.replace('Programado para abrir: ', '');
+  
+  const resumenData = [ 
+    ["CONFIGURACIÓN DEL EVENTO"],
+    ["Horario Programado", textoHorario],
+    [],
+    ["ESTADISTICAS GENERALES DE ASISTENCIA"], 
+    ["ESTADO", "COMENSALES", "PORCENTAJE"], 
+    ["Total Elegidos", totalReg, pctReg], 
+    ["Total Faltantes (Sin elegir)", totalFaltantes, pctFalt], 
+    ["TOTAL EN PADRON", totalPadron, "100%"], 
+    [], 
+    ["DESGLOSE DE OCUPACION POR COMEDOR"], 
+    ["COMEDOR", "CUPOS TOTALES", "CUPOS USADOS", "% DE OCUPACION"] 
+  ];
+  
   Object.entries(LIMITES).forEach(([nombre, limites]) => { 
     const limTotal = (limites.obrero || 0) + (limites.empleado || 0);
     const ocupados = todosLosRegistros.filter(r => r.comedor === nombre).length;
@@ -440,9 +468,11 @@ function exportarExcel() {
   
   const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
   const workbook = XLSX.utils.book_new();
+  
   XLSX.utils.book_append_sheet(workbook, wsRegistros, "Registros");
   XLSX.utils.book_append_sheet(workbook, wsFaltantes, "Sin Elegir"); 
   XLSX.utils.book_append_sheet(workbook, wsResumen, "Resumen y Porcentajes");
+  
   XLSX.writeFile(workbook, `Resumen_Comedores_${new Date().toLocaleDateString('es-PE').replace(/\//g,'-')}.xlsx`);
 }
 </script>
