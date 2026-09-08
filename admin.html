@@ -78,10 +78,12 @@
           <button id="btn-abrir" class="btn btn-green" onclick="setEstadoSistema(true)">¿Quieres Habilitar?</button>
           <button id="btn-cerrar" class="btn btn-red" onclick="setEstadoSistema(false)">✕ Está Cerrado</button>
           
-          <!-- BOTÓN PARA SINCRONIZAR LOS CUPOS -->
-          <button class="btn btn-blue" onclick="forzarSincronizacionConteos()">Actualizar</button>
-          
-          <button class="btn" style="background:#0F172A; color:#fff; margin-left:auto;" onclick="limpiarRegistros()">Resetear Todo (Limpiar)</button>
+          <!-- GRUPO ALINEADO A LA DERECHA CON BOTONES OSCUROS -->
+          <div style="margin-left:auto; display:flex; gap:10px;">
+            <button class="btn" style="background:#0F172A; color:#fff;" onclick="forzarSincronizacionConteos()">Actualizar</button>
+            <button class="btn" style="background:#0F172A; color:#fff;" onclick="limpiarRegistros()">Resetear Todo (Limpiar)</button>
+          </div>
+
         </div>
       </div>
     </div>
