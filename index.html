@@ -2,478 +2,903 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Panel de Control</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+  <title>Elección de Comedores</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Montserrat:wght@800&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Montserrat:wght@800&display=swap" rel="stylesheet">
   <style>
-    :root{--bg:#F1F5F9;--surface:#fff;--ink:#0F172A;--ink-soft:#64748B;--border:#E2E8F0;--ok:#16A34A;--ok-bg:#F0FDF4;--accent:#DC2626;--accent-bg:#FEF2F2;--info:#1D4ED8;--warn:#92400E;--radius:12px;--shadow:0 1px 3px rgba(0,0,0,.08);}
-    *{box-sizing:border-box;margin:0;padding:0} body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
-    #login-screen{position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:1000;}
-    .login-box{background:var(--surface);padding:32px;border-radius:var(--radius);box-shadow:var(--shadow);width:100%;max-width:400px;text-align:center;}
-    .login-box h2{font-family:'Montserrat',sans-serif;margin-bottom:24px;}
-    .login-box input{width:100%;padding:12px;margin-bottom:16px;border:1px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;}
-    .login-box input:focus{border-color:var(--info);}
-    .login-box button{width:100%;padding:12px;background:var(--ink);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;transition:background 0.2s;}
-    #login-error{color:var(--accent);font-size:13px;margin-top:12px;display:none;} #app-content{display:none;}
-    .header{background:var(--ink);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10} 
-    .header h1{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800}
-    .main{max-width:1200px;margin:0 auto;padding:24px 16px}
-    .control-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;align-items:start;}
-    .control-group{display:flex;flex-direction:column;gap:10px;} 
-    .control-title{font-size:12px;font-weight:700;text-transform:uppercase;color:var(--ink-soft);letter-spacing:0.5px;}
-    .control-flex{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
-    .btn{padding:10px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.2s;white-space:nowrap;font-family:'DM Sans',sans-serif;} 
-    .btn-blue{background:var(--info);color:#fff;} .btn-blue:hover{background:#1e40af;}
-    .btn-green{background:var(--ok);color:#fff;} .btn-green:hover:not(:disabled){background:#15803d;}
-    .btn-red{background:var(--accent);color:#fff;} .btn-red:hover:not(:disabled){background:#b91c1c;}
-    .btn-ghost{background:transparent;color:#fff;border:1px solid var(--border);padding:6px 12px;font-size:12px;}
-    input[type="file"]{font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink);outline:none;width:100%;max-width:240px;transition:border-color 0.2s;}
-    input[type="file"]:focus{border-color:var(--info);}
-    .status-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:700;}
-    .status-open{background:var(--ok-bg);color:var(--ok);border:1px solid #bbf7d0;} .status-closed{background:var(--accent-bg);color:var(--accent);border:1px solid #fecaca;}
-    .status-dot{width:8px;height:8px;border-radius:50%;} .status-open .status-dot{background:var(--ok);animation:pulse 1.5s infinite} .status-closed .status-dot{background:var(--accent);}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-    .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px} .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px} .stat-label{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px} .stat-value{font-size:28px;font-weight:700;color:var(--ink);line-height:1} .stat-sub{font-size:12px;color:var(--ink-soft);margin-top:4px}
-    .comedores-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:28px} .comedor-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px} .comedor-nombre{font-size:15px;font-weight:700;margin-bottom:12px} .progress-row{margin-bottom:8px} .progress-label{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-soft);margin-bottom:4px} .progress-bar-bg{width:100%;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden} .progress-fill{height:100%;border-radius:4px;transition:width .4s} .fill-ok{background:var(--ok)} .fill-warn{background:#F59E0B} .fill-full{background:var(--accent)} .comedor-total{font-size:12px;color:var(--ink-soft);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
-    .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:24px} .table-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;} .search-input{padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:220px;outline:none;} .search-input:focus{border-color:var(--info);}
-    table{width:100%;border-collapse:collapse} th{padding:10px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--ink-soft);border-bottom:1px solid var(--border)} td{padding:12px 16px;font-size:13px;border-bottom:1px solid #F1F5F9}
-    .badge{padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase} .badge-obrero{background:#E2E8F0;color:var(--ink)} .badge-empleado{background:#EFF6FF;color:var(--info)}
+    :root {
+      --bg:#F9FAFB;--surface:#FFFFFF;--ink:#000000;--ink-soft:#4B5563;
+      --ink-faint:#9CA3AF;--border:#E5E7EB;--accent:#DC2626;
+      --accent-bg:#FEF2F2;--accent-bdr:#FECACA;--ok:#16A34A;
+      --ok-bg:#F0FDF4;--info-bg:#EFF6FF;--info-text:#1D4ED8;
+      --warn-bg:#FFFBEB;--warn-bdr:#FDE68A;--warn-text:#92400E;
+      --radius-lg:16px;--radius-md:10px;--radius-sm:8px;
+      --shadow:0 4px 6px -1px rgba(0,0,0,.05),0 2px 4px -1px rgba(0,0,0,.03);
+      --trans:.2s ease;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);min-height:100svh;
+      display:flex;align-items:center;justify-content:center;padding:16px}
+    .card{background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius-lg);box-shadow:var(--shadow);
+      width:100%;max-width:450px;overflow:hidden;margin:0 auto}
+    .card-header{padding:26px 28px 18px;border-bottom:1px solid var(--border);text-align:center}
+    .card-header h1{font-family:'Montserrat',sans-serif;font-weight:800;font-size:22px;
+      color:var(--ink);line-height:1.25;letter-spacing:-.5px}
+    .card-body{padding:24px 28px 28px}
+    .sec{display:none}.sec.on{display:block}
+
+    .loader{display:flex;flex-direction:column;align-items:center;gap:14px;padding:36px 0}
+    .spinner{width:30px;height:30px;border:3px solid var(--border);
+      border-top-color:var(--ink);border-radius:50%;animation:spin .75s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .loader p{font-size:14px;color:var(--ink-soft);font-weight:500}
+
+    .state-block{text-align:center;padding:28px 0 8px}
+    .state-icon{width:56px;height:56px;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+    .state-icon svg{width:28px;height:28px}
+    .state-icon.red {background:var(--accent-bg);color:var(--accent)}
+    .state-icon.blue{background:var(--info-bg);color:var(--info-text)}
+    .state-icon.green{background:var(--ok-bg);color:var(--ok)}
+    .state-block h2{font-family:'DM Serif Display',serif;font-size:22px;
+      color:var(--ink);margin-bottom:8px}
+    .state-block p{font-size:14px;color:var(--ink-soft);line-height:1.6}
+
+    label{display:block;font-size:12px;font-weight:700;letter-spacing:.5px;
+      text-transform:uppercase;color:var(--ink);margin-bottom:8px}
+    .field{margin-top:16px}
+    .dni-wrap{position:relative}
+    input.inp-text{width:100%;padding:14px 44px 14px 16px;
+      font-family:'DM Sans',sans-serif;font-size:20px;font-weight:600;
+      color:var(--ink);background:var(--surface);border:2px solid var(--border);
+      border-radius:var(--radius-md);outline:none;letter-spacing:3px;
+      transition:border-color var(--trans)}
+    input.inp-text:focus{border-color:var(--ink)}
+    .dni-clear{position:absolute;right:12px;top:50%;transform:translateY(-50%);
+      width:24px;height:24px;background:var(--border);border:none;border-radius:50%;
+      cursor:pointer;display:none;align-items:center;justify-content:center;
+      color:var(--ink-soft);font-size:14px}
+    .dni-clear:hover{background:#D1D5DB;color:var(--ink)}.dni-clear.show{display:flex}
+    .input-hint{font-size:12px;color:var(--ink-faint);margin-top:6px}
+
+    .btn{width:100%;padding:14px 16px;border:2px solid var(--ink);
+      border-radius:var(--radius-md);font-family:'DM Sans',sans-serif;
+      font-size:15px;font-weight:700;cursor:pointer;transition:all var(--trans)}
+    .btn:active:not(:disabled){transform:scale(.98)}
+    .btn-primary{background:var(--ink);color:#fff;margin-top:18px}
+    .btn-primary:hover:not(:disabled){background:#222;border-color:#222}
+    .btn-primary:disabled{background:var(--surface);color:var(--ink-faint);
+      border-color:var(--border);cursor:not-allowed}
+    .btn-ghost{background:transparent;color:var(--ink);margin-top:12px}
+    .btn-ghost:hover{background:var(--ink);color:#fff}
+
+    .alert{display:none;margin-top:14px;padding:12px 14px;
+      border-radius:var(--radius-sm);font-size:13px;line-height:1.5;font-weight:500}
+    .alert.show{display:flex;gap:8px;align-items:flex-start}
+    .alert svg{width:18px;height:18px;flex-shrink:0}
+    .alert.err{background:var(--accent-bg);border:1px solid var(--accent-bdr);color:var(--accent)}
+    .alert.ok{background:var(--ok-bg);border:1px solid var(--ok-bdr, #bbf7d0);color:var(--ok)}
+
+    .worker-badge{display:flex;align-items:center;gap:12px;padding:12px 16px;
+      background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius-md);margin-bottom:20px}
+    .avatar{width:40px;height:40px;flex-shrink:0;background:var(--bg);
+      border:1px solid var(--border);border-radius:50%;display:flex;
+      align-items:center;justify-content:center;color:var(--ink);
+      font-family:'DM Serif Display',serif;font-size:16px}
+    .worker-name{font-size:14px;font-weight:700;color:var(--ink);
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .worker-meta{font-size:12px;color:var(--ink-soft);margin-top:2px}
+    .cat-pill{display:inline-block;font-size:10px;font-weight:700;
+      letter-spacing:.5px;text-transform:uppercase;padding:2px 8px;
+      border-radius:20px;background:#E5E7EB;color:var(--ink);
+      margin-left:6px;vertical-align:middle}
+
+    .comedores-header{display:flex;align-items:center;
+      justify-content:space-between;margin-bottom:12px}
+    .sec-title{font-size:12px;font-weight:700;letter-spacing:.5px;
+      text-transform:uppercase;color:var(--ink)}
+    .live-badge{display:flex;align-items:center;gap:5px;
+      font-size:11px;color:var(--ok);font-weight:600}
+    .live-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);
+      animation:livePulse 1.8s ease-in-out infinite}
+    @keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}
+      50%{opacity:.4;transform:scale(.7)}}
+
+    .comedores-list{display:flex;flex-direction:column;gap:8px;
+      max-height:270px;overflow-y:auto;padding-right:4px}
+    .comedor-item{display:flex;align-items:center;justify-content:space-between;
+      padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-md);
+      cursor:pointer;background:var(--surface);transition:all var(--trans);user-select:none}
+    .comedor-item:hover,.comedor-item.sel{border-color:var(--ink);background:var(--ink)}
+    .cn{font-size:14px;font-weight:700;color:var(--ink);transition:color var(--trans)}
+    .comedor-item:hover .cn,.comedor-item.sel .cn{color:#fff}
+    .cpill{font-size:11.5px;font-weight:700;padding:4px 12px;background:var(--bg);
+      color:var(--ink);border:1px solid var(--border);border-radius:20px;
+      white-space:nowrap;transition:all var(--trans)}
+    .comedor-item:hover .cpill,.comedor-item.sel .cpill{background:#E5E7EB;
+      color:var(--ink);border-color:transparent}
+    .no-cupos{text-align:center;padding:32px 0;color:var(--ink-soft);
+      font-size:14px;line-height:1.6;font-weight:500}
+
+    .ya-card{background:var(--bg);border:1px solid var(--border);
+      border-radius:var(--radius-md);padding:20px;margin:20px 0}
+    .ya-card-label{font-size:11px;font-weight:700;letter-spacing:1px;
+      text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px}
+    .ya-comedor{font-family:'DM Serif Display',serif;font-size:26px;
+      color:var(--ink);margin-bottom:12px}
+    .ya-meta{font-size:13px;color:var(--ink-soft)}
+    .ya-meta strong{color:var(--ink);font-weight:600}
+    .exito-comedor{display:inline-block;margin-top:16px;padding:10px 24px;
+      background:var(--ink);border:1px solid var(--ink);border-radius:var(--radius-md);
+      font-size:16px;font-weight:700;color:#fff;letter-spacing:.5px}
+    .exito-hora{margin-top:12px;font-size:14px;color:var(--ink-soft)}
+    .exito-hora strong{color:var(--ink);font-weight:700}
+
+    .ticket-vivo{position:relative;overflow:hidden}
+    .ticket-bg{position:absolute;top:-50%;left:-50%;width:200%;height:200%;
+      opacity:.04;font-size:24px;font-weight:800;word-break:break-all;
+      pointer-events:none;transform:rotate(-20deg);z-index:0}
+    .live-clock{position:relative;z-index:2;margin-top:16px;font-family:monospace;
+      font-size:22px;font-weight:700;color:#fff;background:var(--ink);
+      padding:8px 24px;border-radius:30px;display:inline-block;letter-spacing:2px}
+    .content-front{position:relative;z-index:2}
+
+    .expulsion-box{margin-top:16px;padding:16px;background:var(--warn-bg);
+      border:2px solid var(--warn-bdr);border-radius:var(--radius-md);
+      text-align:center;display:none}
+    .expulsion-box p{font-size:13px;color:var(--warn-text);font-weight:600;margin-bottom:10px}
+    .countdown-ring{position:relative;width:64px;height:64px;margin:0 auto}
+    .countdown-ring svg{transform:rotate(-90deg)}
+    .ring-bg{fill:none;stroke:#FDE68A;stroke-width:5}
+    .ring-fg{fill:none;stroke:var(--warn-text);stroke-width:5;
+      stroke-linecap:round;transition:stroke-dashoffset 1s linear}
+    .countdown-num{position:absolute;top:50%;left:50%;
+      transform:translate(-50%,-50%);font-family:'Montserrat',sans-serif;
+      font-size:22px;font-weight:800;color:var(--warn-text)}
+
+    .consulta-box{margin-top:24px;padding-top:20px;border-top:1px solid var(--border)}
+    .consulta-title{display:block;font-size:12px;font-weight:700;
+      letter-spacing:.5px;text-transform:uppercase;color:var(--ink-soft);
+      margin-bottom:12px;text-align:center}
+    .inp-consulta{width:100%;padding:12px 44px 12px 14px;
+      font-family:'DM Sans',sans-serif;font-size:18px;font-weight:600;
+      color:var(--ink);background:var(--surface);border:2px solid var(--border);
+      border-radius:var(--radius-md);outline:none;letter-spacing:2px;
+      transition:border-color var(--trans)}
+    .inp-consulta:focus{border-color:var(--ink)}
+    .btn-consultar{width:100%;padding:12px 16px;border:2px solid var(--ink);
+      border-radius:var(--radius-md);font-family:'DM Sans',sans-serif;
+      font-size:14px;font-weight:700;cursor:pointer;
+      background:var(--ink);color:#fff;margin-top:12px;transition:all var(--trans)}
+    .btn-consultar:hover:not(:disabled){background:#222}
+    .btn-consultar:disabled{background:var(--surface);color:var(--ink-faint);
+      border-color:var(--border);cursor:not-allowed}
+
+    .divider{height:1px;background:var(--border);margin:24px 0}
+    .ani{animation:fadeUp .3s ease forwards}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}
+      to{opacity:1;transform:translateY(0)}}
   </style>
 </head>
 <body>
-<div id="login-screen">
-  <div class="login-box">
-    <h2>Acceso Seguro</h2>
-    <input type="email" id="txt-email" placeholder="Correo electrónico">
-    <input type="password" id="txt-pass" placeholder="Contraseña">
-    <button onclick="iniciarSesion()">Ingresar al Panel</button>
-    <div id="login-error">Credenciales incorrectas. Intente de nuevo.</div>
-  </div>
-</div>
-<div id="app-content">
-  <div class="header">
-    <h1>Panel de Control</h1>
-    <div style="display:flex; gap:15px; align-items:center;">
-      <div id="status-display" class="status-badge status-closed"><div class="status-dot"></div> <span id="status-text">Sistema Cerrado</span></div>
-      <button class="btn btn-ghost" onclick="cerrarSesion()">Cerrar Sesión</button>
-    </div>
-  </div>
-  <div class="main">
-    <div class="control-panel">
-      <div class="control-group">
-        <div class="control-title">1. Subir Base de Datos (Config + Padrones)</div>
-        <div class="control-flex">
-          <input type="file" id="excel-file" accept=".xlsx, .xls" />
-          <button class="btn btn-blue" onclick="procesarExcel()">Cargar a Firebase</button>
-        </div>
-        <small style="color:var(--ink-soft);font-size:11px;" id="info-horario">El Excel configurará los límites, padrón y horarios.</small>
-      </div>
-      <div class="control-group">
-        <div class="control-title">2. Acciones Manuales de Emergencia</div>
-        <div class="control-flex">
-          <button id="btn-abrir" class="btn btn-green" onclick="setEstadoSistema(true)">¿Quieres Habilitar?</button>
-          <button id="btn-cerrar" class="btn btn-red" onclick="setEstadoSistema(false)">✕ Está Cerrado</button>
-          <button class="btn" style="background:#0F172A; color:#fff; margin-left:auto;" onclick="limpiarRegistros()">Resetear Todo (Limpiar)</button>
-        </div>
-      </div>
-    </div>
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-label">Total registrados</div><div class="stat-value" id="stat-total">0</div><div class="stat-sub">de <span id="stat-padron">0</span> en padrón</div></div>
-      <div class="stat-card"><div class="stat-label">Obreros</div><div class="stat-value" id="stat-obreros">0</div></div>
-      <div class="stat-card"><div class="stat-label">Empleados</div><div class="stat-value" id="stat-empleados">0</div></div>
-      <div class="stat-card"><div class="stat-label">Última actualización</div><div class="stat-value" style="font-size:16px" id="stat-hora">—</div></div>
-    </div>
-    <div class="comedores-grid" id="comedores-grid"></div>
-    
-    <!-- Tabla de Registrados -->
-    <div class="table-wrap">
-      <div class="table-header">
-        <h3>Registros individuales</h3>
-        <div class="control-flex">
-          <input type="text" id="search-input" class="search-input" placeholder="Buscar nombre o DNI...">
-          <button class="btn btn-green" onclick="exportarExcel()">⬇ Descargar Excel de Resumen</button>
-        </div>
-      </div>
-      <div style="overflow-x:auto; max-height:350px; overflow-y:auto">
-        <table><thead><tr><th>#</th><th>DNI</th><th>Nombre</th><th>Categoría</th><th>Comedor</th><th>Hora</th></tr></thead><tbody id="tabla-body"></tbody></table>
+<div class="card">
+  <div id="card-header" class="card-header"><h1>ELECCIÓN DE COMEDORES</h1></div>
+  <div class="card-body">
+
+    <!-- LOADER -->
+    <div id="sec-loader" class="sec on">
+      <div class="loader ani">
+        <div class="spinner"></div>
+        <p id="loader-msg">Conectando con el sistema...</p>
       </div>
     </div>
 
-    <!-- Tabla de Faltantes (Sin Elegir) -->
-    <div class="table-wrap">
-      <div class="table-header">
-        <h3>Sin elegir (<span id="count-faltantes">0</span>)</h3>
-        <input type="text" id="search-faltantes" class="search-input" placeholder="Buscar faltante...">
+    <!-- CERRADO + MÓDULO DE CONSULTA -->
+    <div id="sec-cerrado" class="sec">
+      <div class="state-block ani">
+        <div class="state-icon red">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+            stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M12 9v4m0 3h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          </svg>
+        </div>
+        <h2>Sistema Cerrado</h2>
+        <p id="msg-cerrado"></p>
+
+        <!-- Módulo de consulta -->
+        <div class="consulta-box">
+          <span class="consulta-title">¿Olvidaste tu comedor? Consulta aquí</span>
+          <div class="dni-wrap">
+            <input type="text" id="input-dni-consulta" class="inp-consulta inp-text"
+              inputmode="numeric" maxlength="8"
+              placeholder="Tu DNI" autocomplete="off"
+              oninput="onDniConsultaInput()"
+              onkeydown="onDniConsultaKey(event)">
+            <button class="dni-clear" id="dni-clear-consulta"
+              onclick="limpiarDniConsulta()" tabindex="-1">✕</button>
+          </div>
+          <button id="btn-consultar" class="btn-consultar"
+            onclick="consultarTicketCerrado()" disabled>
+            Consultar
+          </button>
+          <div id="err-consulta" class="alert err">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M12 9v4m0 3h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            </svg>
+            <span id="err-consulta-txt"></span>
+          </div>
+        </div>
+
+        <button id="btn-reintentar" class="btn btn-ghost"
+          style="display:none;margin-top:16px"
+          onclick="cargarSistema()">Reintentar conexión</button>
       </div>
-      <div style="overflow-x:auto; max-height:350px; overflow-y:auto">
-        <table><thead><tr><th>#</th><th>DNI</th><th>Nombre</th><th>Categoría</th></tr></thead><tbody id="tabla-faltantes"></tbody></table>
+    </div>
+
+    <!-- DNI -->
+    <div id="sec-dni" class="sec">
+      <div class="ani">
+        <div class="field">
+          <label>Número de DNI</label>
+          <div class="dni-wrap">
+            <input type="text" id="input-dni" class="inp-text"
+              inputmode="numeric" maxlength="8"
+              placeholder="00000000" autocomplete="off"
+              oninput="onDniInput()" onkeydown="onDniKey(event)">
+            <button class="dni-clear" id="dni-clear"
+              onclick="limpiarDni()" tabindex="-1">✕</button>
+          </div>
+          <p class="input-hint">Ingrese sus 8 dígitos</p>
+        </div>
+        <button id="btn-continuar" class="btn btn-primary"
+          onclick="validarTrabajador()" disabled>Continuar</button>
+        <div id="err-dni" class="alert err">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+            stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M12 9v4m0 3h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          </svg>
+          <span id="err-dni-txt"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- YA REGISTRADO — ticket visual -->
+    <div id="sec-ya" class="sec">
+      <div class="state-block ani ticket-vivo">
+        <div id="ticket-bg-ya" class="ticket-bg"></div>
+        <div class="state-icon blue content-front">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+            stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <h2 class="content-front">Registrado</h2>
+        <p class="content-front">
+          Hola, <strong id="ya-nombre" style="color:var(--ink)"></strong>
+        </p>
+        <div class="ya-card content-front" style="background:rgba(255,255,255,0.9)">
+          <div class="ya-card-label">Tu comedor elegido es:</div>
+          <div id="ya-comedor" class="ya-comedor"></div>
+          <div class="ya-meta">Registrado el <strong id="ya-fecha"></strong></div>
+        </div>
+        <div id="live-clock-ya" class="live-clock">--:--:--</div>
+        <div class="divider content-front"></div>
+        <button class="btn btn-ghost content-front"
+          onclick="regresarInicio()">Regresar</button>
+      </div>
+    </div>
+
+    <!-- SELECCIÓN DE COMEDORES -->
+    <div id="sec-comedores" class="sec">
+      <div class="ani">
+        <div class="worker-badge">
+          <div class="avatar" id="worker-av"></div>
+          <div style="overflow:hidden">
+            <div class="worker-name" id="lbl-nombre"></div>
+            <div class="worker-meta">
+              DNI <span id="lbl-dni"
+                style="font-weight:600;color:var(--ink)"></span>
+              <span class="cat-pill" id="lbl-cat"></span>
+            </div>
+          </div>
+        </div>
+        <div class="comedores-header">
+          <div class="sec-title">Comedores Disponibles</div>
+          <div class="live-badge"><div class="live-dot"></div>EN VIVO</div>
+        </div>
+        <div id="lista-comedores" class="comedores-list"></div>
+        <div class="expulsion-box" id="expulsion-box">
+          <p id="expulsion-msg"></p>
+          <div class="countdown-ring">
+            <svg viewBox="0 0 64 64" width="64" height="64">
+              <circle class="ring-bg" cx="32" cy="32" r="27"/>
+              <circle class="ring-fg" id="ring-fg" cx="32" cy="32" r="27"/>
+            </svg>
+            <div class="countdown-num" id="countdown-num">5</div>
+          </div>
+        </div>
+        <button id="btn-elegir" class="btn btn-primary"
+          onclick="confirmarEleccion(false)" disabled>
+          Confirmar Elección
+        </button>
+        <div id="err-com" class="alert err">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+            stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M12 9v4m0 3h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          </svg>
+          <span id="err-com-txt"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ÉXITO -->
+    <div id="sec-exito" class="sec">
+      <div class="state-block ani ticket-vivo">
+        <div id="ticket-bg-exito" class="ticket-bg"></div>
+        <div class="state-icon green content-front">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+            stroke="currentColor" stroke-width="3">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M5 13l4 4L19 7"/>
+          </svg>
+        </div>
+        <h2 class="content-front">¡Registro exitoso!</h2>
+        <p class="content-front">Usted ha elegido el comedor:</p>
+        <div id="exito-comedor" class="exito-comedor content-front"></div>
+        <div class="ya-card content-front"
+          style="text-align:left;margin-top:16px;background:rgba(255,255,255,0.9)">
+          <div class="ya-card-label">Datos del trabajador</div>
+          <div class="ya-meta" style="margin-bottom:4px">
+            <strong id="exito-nombre"
+              style="color:var(--ink);font-size:15px"></strong>
+          </div>
+          <div class="ya-meta">
+            DNI <strong id="exito-dni" style="color:var(--ink)"></strong>
+            &nbsp;·&nbsp;
+            <strong id="exito-cat" style="color:var(--ink)"></strong>
+          </div>
+        </div>
+        <div id="live-clock-exito" class="live-clock">--:--:--</div>
+        <div id="exito-hora" class="exito-hora content-front"
+          style="margin-top:8px"></div>
+        <div class="divider content-front"></div>
+        <button class="btn btn-ghost content-front"
+          onclick="volverARegistrar()">Volver al Inicio</button>
       </div>
     </div>
 
   </div>
 </div>
+
 <script src="config.js"></script>
 <script>
-let db, auth, LIMITES = {}, TRABAJADORES = {}, todosLosRegistros = [], sistemaForzado = null, horaInicio = "", horaFin = "";
-let vipsPendientes = {}, conteosActuales = {}, ELECCIONES_ACTUALES = {};
+// ══════════════════════════════════════════════════════════════
+//  ESTADO GLOBAL
+// ══════════════════════════════════════════════════════════════
+let db;
+let LIMITES        = {};
+let usr            = { dni:'', nombre:'', categoria:'', vip:'' };
+let comedorSel     = '';
+let confirmando    = false;
+let unsubConteos   = null;
+let timerCountdown = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
-  db = firebase.database(); auth = firebase.auth();
-  auth.onAuthStateChanged(user => {
-    if (user) { document.getElementById('login-screen').style.display = 'none'; document.getElementById('app-content').style.display = 'block'; iniciarPanel(); }
-    else { document.getElementById('login-screen').style.display = 'flex'; document.getElementById('app-content').style.display = 'none'; }
-  });
-});
+let _relojYa    = null;
+let _relojExito = null;
+let _sistemaAbierto = false;
 
-function iniciarSesion() { auth.signInWithEmailAndPassword(document.getElementById('txt-email').value, document.getElementById('txt-pass').value).then(() => document.getElementById('login-error').style.display='none').catch(() => document.getElementById('login-error').style.display='block'); }
-function cerrarSesion() { auth.signOut(); }
-
-function iniciarPanel() {
-  db.ref('evento/datos_iniciales').on('value', snap => {
-    const data = snap.val() || {}; 
-    LIMITES = data.limites || {};
-    horaInicio = data.horaInicio || ""; horaFin = data.horaFin || "";
-    sistemaForzado = data.sistemaForzado !== undefined ? data.sistemaForzado : null;
-    
-    let txtIni = data.horaInicioTxt || horaInicio;
-    let txtFin = data.horaFinTxt || horaFin;
-
-    if(txtIni && txtFin) { document.getElementById('info-horario').textContent = `Programado para abrir: ${txtIni} a ${txtFin}`; } 
-    else { document.getElementById('info-horario').textContent = "Sube un Excel para configurar el nuevo turno."; }
-    actualizarUIControlSistema();
-    actualizarConteos(conteosActuales);
-  });
-
-  db.ref('evento/trabajadores').on('value', snap => {
-    TRABAJADORES = snap.val() || {};
-    document.getElementById('stat-padron').textContent = Object.keys(TRABAJADORES).length;
-    actualizarElecciones(ELECCIONES_ACTUALES);
-  });
-  
-  db.ref('evento/vips_pendientes').on('value', snap => {
-    vipsPendientes = snap.val() || {};
-    verificarDisparoVIPs();
-  });
-  
-  db.ref('evento/conteos').on('value', snap => {
-    conteosActuales = snap.val() || {};
-    actualizarConteos(conteosActuales);
-    verificarDisparoVIPs(); 
-  });
-  
-  db.ref('evento/elecciones').on('value', snap => {
-    ELECCIONES_ACTUALES = snap.val() || {};
-    actualizarElecciones(ELECCIONES_ACTUALES);
-  });
-  
-  document.getElementById('search-input').addEventListener('input', filtrarTabla);
-  
-  document.getElementById('search-faltantes')?.addEventListener('input', () => {
-    const dnisReg = new Set(todosLosRegistros.map(r => r.dni));
-    const faltantes = Object.entries(TRABAJADORES)
-      .filter(([dni]) => !dnisReg.has(dni))
-      .map(([dni, datos]) => ({ dni, ...datos }));
-    renderizarFaltantes(faltantes);
-  });
-  
-  setInterval(actualizarUIControlSistema, 10000);
+// ══════════════════════════════════════════════════════════════
+//  UTILIDADES
+// ══════════════════════════════════════════════════════════════
+function show(id) {
+  ['sec-loader','sec-cerrado','sec-dni','sec-ya','sec-comedores','sec-exito']
+    .forEach(s => document.getElementById(s).classList.remove('on'));
+  document.getElementById(id).classList.add('on');
 }
 
-function verificarDisparoVIPs() {
-    if (!vipsPendientes || Object.keys(vipsPendientes).length === 0) return;
-    if (!LIMITES || Object.keys(LIMITES).length === 0) return;
-    
-    Object.entries(vipsPendientes).forEach(([dni, datos]) => {
-        const comedor = datos.comedor;
-        const cat = esEmpAdmin(datos.categoria) ? 'empleado' : 'obrero';
-        const limite = (LIMITES[comedor] || {})[cat] || 0;
-        const uso = (conteosActuales[comedor] || {})[cat] || 0;
-        const umbral = limite / 2;
-        
-        if (limite > 0 && uso >= umbral) {
-            procesarVipAutomatico(dni, datos);
-        }
+function setErr(base, msg) {
+  document.getElementById(base).className = 'alert err show';
+  document.getElementById(base + '-txt').textContent = msg;
+}
+function clrErr(base) {
+  document.getElementById(base).classList.remove('show');
+}
+
+function limpiarRelojes() {
+  if (_relojYa)    { clearInterval(_relojYa);    _relojYa    = null; }
+  if (_relojExito) { clearInterval(_relojExito); _relojExito = null; }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  INICIO — escucha datos_iniciales en tiempo real
+// ══════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', cargarSistema);
+
+function cargarSistema() {
+  show('sec-loader');
+  document.getElementById('btn-reintentar').style.display = 'none';
+
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database();
+
+    db.ref('evento/datos_iniciales').on('value', snap => {
+      const data = snap.val() || {};
+      let abierto = false;
+
+      if      (data.sistemaForzado === true)  { abierto = true; }
+      else if (data.sistemaForzado === false)  { abierto = false; }
+      else if (data.horaInicio && data.horaFin) {
+        const ahora   = new Date();
+        const fInicio = new Date(data.horaInicio);
+        const fFin    = new Date(data.horaFin);
+        if (ahora >= fInicio && ahora <= fFin) abierto = true;
+      }
+
+      _sistemaAbierto = abierto;
+      LIMITES         = data.limites || {};
+
+      if (!abierto) {
+        document.getElementById('msg-cerrado').textContent =
+          data.mensajeSistema ||
+          "El acceso al sistema se encuentra temporalmente inactivo. Por favor, manténgase atento a los canales oficiales de comunicación, donde se informará oportunamente el horario de apertura para la selección de su comedor.";
+
+        const viendoTicket =
+          document.getElementById('sec-exito').classList.contains('on') ||
+          document.getElementById('sec-ya').classList.contains('on');
+        if (!viendoTicket) show('sec-cerrado');
+        return;
+      }
+
+      if (document.getElementById('sec-loader').classList.contains('on') ||
+          document.getElementById('sec-cerrado').classList.contains('on')) {
+        show('sec-dni');
+        document.getElementById('input-dni').focus();
+      }
     });
+
+  } catch (e) {
+    document.getElementById('msg-cerrado').textContent =
+      'No se pudo conectar. Verifica tu internet e intenta de nuevo.';
+    document.getElementById('btn-reintentar').style.display = 'block';
+    show('sec-cerrado');
+  }
 }
 
-async function procesarVipAutomatico(dni, datos) {
-    const comedor = datos.comedor;
-    const cat = esEmpAdmin(datos.categoria) ? 'empleado' : 'obrero';
-    const limite = (LIMITES[comedor] || {})[cat] || 0;
+// ══════════════════════════════════════════════════════════════
+//  INPUT DNI PRINCIPAL
+// ══════════════════════════════════════════════════════════════
+function onDniInput() {
+  const inp = document.getElementById('input-dni');
+  inp.value = inp.value.replace(/\D/g, '').slice(0, 8);
+  document.getElementById('dni-clear')
+    .classList.toggle('show', inp.value.length > 0);
+  document.getElementById('btn-continuar').disabled =
+    (inp.value.length !== 8);
+  clrErr('err-dni');
+}
+function onDniKey(e) {
+  if (e.key === 'Enter' &&
+      !document.getElementById('btn-continuar').disabled) {
+    validarTrabajador();
+  }
+}
+function limpiarDni() {
+  document.getElementById('input-dni').value = '';
+  document.getElementById('input-dni').focus();
+  onDniInput();
+}
 
-    const yaRegistrado = await db.ref(`evento/elecciones/${dni}`).get();
-    if (yaRegistrado.exists()) {
-        await db.ref(`evento/vips_pendientes/${dni}`).remove();
+// ══════════════════════════════════════════════════════════════
+//  MÓDULO DE CONSULTA (sistema cerrado)
+// ══════════════════════════════════════════════════════════════
+function onDniConsultaInput() {
+  const inp = document.getElementById('input-dni-consulta');
+  inp.value = inp.value.replace(/\D/g, '').slice(0, 8);
+  document.getElementById('dni-clear-consulta')
+    .classList.toggle('show', inp.value.length > 0);
+  document.getElementById('btn-consultar').disabled =
+    (inp.value.length !== 8);
+  clrErr('err-consulta');
+}
+function onDniConsultaKey(e) {
+  if (e.key === 'Enter' &&
+      !document.getElementById('btn-consultar').disabled) {
+    consultarTicketCerrado();
+  }
+}
+function limpiarDniConsulta() {
+  document.getElementById('input-dni-consulta').value = '';
+  document.getElementById('input-dni-consulta').focus();
+  onDniConsultaInput();
+}
+
+async function consultarTicketCerrado() {
+  clrErr('err-consulta');
+  const dni = document.getElementById('input-dni-consulta').value.padStart(8, '0');
+  const btn = document.getElementById('btn-consultar');
+
+  btn.disabled    = true;
+  btn.textContent = 'Buscando...';
+
+  try {
+    const snap = await db.ref('evento/elecciones/' + dni).once('value');
+
+    if (snap.exists()) {
+      const reg = snap.val();
+
+      document.getElementById('ya-nombre').textContent = reg.nombre || 'Trabajador';
+      document.getElementById('ya-comedor').textContent = reg.comedor;
+      document.getElementById('ya-fecha').textContent   = reg.fecha;
+
+      document.getElementById('ticket-bg-ya').textContent = (dni + ' ').repeat(150);
+
+      limpiarRelojes();
+      _relojYa = setInterval(() => {
+        document.getElementById('live-clock-ya').textContent =
+          new Date().toLocaleTimeString('es-PE');
+      }, 1000);
+
+      document.getElementById('card-header').style.display = 'none';
+      show('sec-ya');
+
+    } else {
+      setErr('err-consulta', 'No encontramos tu elección registrada. Consulta con Servicios Generales.');
+    }
+
+  } catch (e) {
+    setErr('err-consulta', 'Error de red al consultar. Intenta de nuevo.');
+  }
+
+  btn.textContent = 'Consultar';
+  btn.disabled    = false;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  VALIDAR TRABAJADOR (sistema abierto)
+// ══════════════════════════════════════════════════════════════
+async function validarTrabajador() {
+  clrErr('err-dni');
+  let dni = document.getElementById('input-dni').value.padStart(8, '0');
+
+  const btn = document.getElementById('btn-continuar');
+  btn.disabled    = true;
+  btn.textContent = 'Verificando...';
+
+  try {
+    const snap = await db.ref('evento/elecciones/' + dni).once('value');
+
+    if (snap.exists()) {
+      const reg = snap.val();
+      document.getElementById('ya-nombre').textContent  = reg.nombre;
+      document.getElementById('ya-comedor').textContent = reg.comedor;
+      document.getElementById('ya-fecha').textContent   = reg.fecha;
+
+      document.getElementById('ticket-bg-ya').textContent = (dni + ' ').repeat(150);
+
+      limpiarRelojes();
+      _relojYa = setInterval(() => {
+        document.getElementById('live-clock-ya').textContent =
+          new Date().toLocaleTimeString('es-PE');
+      }, 1000);
+
+      document.getElementById('card-header').style.display = 'none';
+      btn.textContent = 'Continuar';
+      btn.disabled    = false;
+      show('sec-ya');
+      return;
+    }
+
+    const snapTrab = await db.ref('evento/trabajadores/' + dni).once('value');
+    if (!snapTrab.exists()) {
+        setErr('err-dni', 'DNI no registrado en el padrón. Consulte con Administración.');
+        btn.textContent = 'Continuar';
+        btn.disabled    = false;
         return;
     }
 
-    const claim = await db.ref(`evento/vips_pendientes/${dni}`).transaction(vipData => {
-        if (!vipData) return; 
-        return null; 
-    });
+    const datosTrab = snapTrab.val();
 
-    if (!claim.committed) return;
+    usr = {
+      dni,
+      nombre:    datosTrab.nombre,
+      categoria: datosTrab.categoria,
+      vip:       datosTrab.vip || ''
+    };
 
-    await db.ref(`evento/conteos/${comedor}`).transaction(actual => {
-        const act = actual || { obrero: 0, empleado: 0 };
-        if ((act[cat] || 0) >= limite) return act; 
-        return { ...act, [cat]: (act[cat] || 0) + 1 };
-    });
-    
-    const ahora = new Date();
-    const f = ahora.toLocaleDateString('es-PE') + ' ' + ahora.toTimeString().slice(0, 8);
-    await db.ref(`evento/elecciones/${dni}`).set({
-        nombre: datos.nombre,
-        categoria: datos.categoria,
-        comedor: comedor,
-        fecha: f,
-        timestamp: firebase.database.ServerValue.TIMESTAMP
-    });
+    if (usr.vip !== '') {
+      comedorSel = usr.vip.trim();
+      await confirmarEleccion(true);
+      return;
+    }
+
+    btn.textContent = 'Continuar';
+    btn.disabled    = false;
+
+    document.getElementById('lbl-nombre').textContent = usr.nombre;
+    document.getElementById('lbl-dni').textContent    = usr.dni;
+    document.getElementById('lbl-cat').textContent    = usr.categoria;
+
+    const p = usr.nombre.split(' ');
+    document.getElementById('worker-av').textContent =
+      ((p[0]?.[0] || '') + (p[1]?.[0] || '')).toUpperCase();
+
+    document.getElementById('card-header').style.display = 'none';
+    show('sec-comedores');
+    suscribirConteos();
+
+  } catch (e) {
+    console.error('validarTrabajador error:', e);
+    setErr('err-dni', 'Error de conexión. Intenta de nuevo.');
+    btn.textContent = 'Continuar';
+    btn.disabled    = false;
+  }
 }
 
-function esEmpAdmin(cat) {
+function esEmp(cat) {
   const c = (cat || '').toUpperCase();
   return c === 'EMPLEADO' || c === 'PRACTICANTE';
 }
 
-function convertirFechaExcelAISO(fechaStr) {
-    if (!fechaStr) return "";
-    let partes = fechaStr.trim().replace(/\s+/g, ' ').split(" ");
-    if (partes.length < 2) return fechaStr; 
-    let fecha = partes[0].split(/[/-]/);
-    let horaStr = partes[1].split(":");
-    let ampm = partes[2] ? partes[2].toUpperCase() : "";
-    
-    if (fecha.length === 3) {
-        let dia = fecha[0]; let mes = fecha[1]; let anio = fecha[2];
-        if (dia.length === 4) { anio = fecha[0]; dia = fecha[2]; }
-        dia = dia.padStart(2, '0'); mes = mes.padStart(2, '0');
-        if (anio.length === 2) anio = "20" + anio;
-        
-        let hr = parseInt(horaStr[0], 10);
-        let min = (horaStr[1] || "00").padStart(2, '0');
-        
-        if (ampm === "PM" && hr < 12) hr += 12;
-        if (ampm === "AM" && hr === 12) hr = 0;
-        
-        let hrStr = hr.toString().padStart(2, '0');
-        return `${anio}-${mes}-${dia}T${hrStr}:${min}:00`;
-    }
-    return fechaStr;
+// ══════════════════════════════════════════════════════════════
+//  CONTEOS EN TIEMPO REAL
+// ══════════════════════════════════════════════════════════════
+function suscribirConteos() {
+  if (unsubConteos) db.ref('evento/conteos').off('value', unsubConteos);
+  unsubConteos = db.ref('evento/conteos').on('value', snap => {
+    pintarComedores(snap.val() || {});
+  });
 }
 
-function procesarExcel() {
-  const file = document.getElementById('excel-file').files[0]; if (!file) { alert("Selecciona un Excel."); return; }
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const wb = XLSX.read(new Uint8Array(e.target.result), {type: 'array', cellDates: true, dateNF: 'yyyy-mm-dd hh:mm'}); 
-      let trab = {}, lim = {};
-      let preVips = {}; 
-      
-      let hInicioTxt = "", hFinTxt = "";
-      let isoInicio = "", isoFin = "";
-      
-      if (wb.Sheets['CONFIGURACION']) {
-        const filasConf = XLSX.utils.sheet_to_json(wb.Sheets['CONFIGURACION'], {header: 1, raw: false});
-        filasConf.forEach(f => { 
-            if(f[0] === 'INICIO' && f[1]) {
-                hInicioTxt = String(f[1]).trim();
-                isoInicio = convertirFechaExcelAISO(hInicioTxt);
-            }
-            if(f[0] === 'FIN' && f[1]) {
-                hFinTxt = String(f[1]).trim();
-                isoFin = convertirFechaExcelAISO(hFinTxt);
-            }
-        });
+function pintarComedores(conteos) {
+  if (confirmando) return;
+
+  const cont  = document.getElementById('lista-comedores');
+  const campo = esEmp(usr.categoria) ? 'empleado' : 'obrero';
+
+  const disponibles = Object.entries(LIMITES)
+    .map(([nombre, max]) => {
+      const cupos = Math.max(
+        0,
+        (max[campo] || 0) - ((conteos[nombre] || {})[campo] || 0)
+      );
+      return { nombre, cupos };
+    })
+    .filter(c => c.cupos > 0);
+
+  if (comedorSel && !disponibles.some(c => c.nombre === comedorSel)) {
+    activarExpulsion(comedorSel);
+    comedorSel = '';
+  }
+
+  cont.innerHTML = '';
+
+  if (disponibles.length === 0) {
+    cont.innerHTML = '<div class="no-cupos">No hay cupos disponibles.</div>';
+    document.getElementById('btn-elegir').disabled = true;
+    return;
+  }
+
+  disponibles.forEach(c => {
+    const el = document.createElement('div');
+    el.className      = 'comedor-item';
+    el.dataset.nombre = c.nombre;
+    if (c.nombre === comedorSel) el.classList.add('sel');
+
+    el.innerHTML = `<span class="cn">${c.nombre}</span>
+      <span class="cpill">${c.cupos} cupo${c.cupos !== 1 ? 's' : ''}</span>`;
+
+    el.addEventListener('click', () => {
+      if (confirmando) return;
+      detenerCountdown();
+      comedorSel = c.nombre;
+      document.querySelectorAll('.comedor-item').forEach(x =>
+        x.classList.toggle('sel', x.dataset.nombre === c.nombre)
+      );
+      document.getElementById('btn-elegir').disabled = false;
+      clrErr('err-com');
+    });
+
+    cont.appendChild(el);
+  });
+
+  if (comedorSel) document.getElementById('btn-elegir').disabled = false;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  CONFIRMAR ELECCIÓN — transacción atómica Firebase
+// ══════════════════════════════════════════════════════════════
+async function confirmarEleccion(esModoVIP) {
+  if (!comedorSel || confirmando) return;
+  confirmando = true;
+
+  const comedorElegido = comedorSel;
+  const btn   = document.getElementById('btn-elegir');
+  const campo = esEmp(usr.categoria) ? 'empleado' : 'obrero';
+  const limite = (LIMITES[comedorElegido] || {})[campo] || 0;
+
+  if (!esModoVIP) {
+    btn.disabled    = true;
+    btn.textContent = 'Procesando...';
+    clrErr('err-com');
+  }
+
+  try {
+    const timeoutP = new Promise((_, rej) =>
+      setTimeout(() => rej(new Error('TIMEOUT')), 8000));
+
+    const txnP = db.ref('evento/conteos/' + comedorElegido)
+      .transaction(datos => {
+        const act = datos || { obrero: 0, empleado: 0 };
+        const uso = act[campo] || 0;
+        if (uso >= limite) return undefined; 
+        return { ...act, [campo]: uso + 1 };
+      });
+
+    const res = await Promise.race([txnP, timeoutP]);
+
+    if (!res.committed) {
+      confirmando = false;
+      if (!esModoVIP) {
+        btn.textContent = 'Confirmar Elección';
+        btn.disabled    = false;
+        activarExpulsion(comedorElegido);
+        comedorSel = '';
+      } else {
+        document.getElementById('btn-continuar').textContent = 'Continuar';
+        document.getElementById('btn-continuar').disabled    = false;
+        setErr('err-dni', 'El comedor VIP asignado "' + comedorElegido + '" ya no tiene cupos.');
       }
-      if (wb.Sheets['COMEDORES']) { XLSX.utils.sheet_to_json(wb.Sheets['COMEDORES'], {header: 1}).slice(1).forEach(f => { if(f[0]) lim[String(f[0]).trim()] = {obrero: parseInt(f[1])||0, empleado: parseInt(f[2])||0}; }); }
-      if (wb.Sheets['TRABAJADORES']) { XLSX.utils.sheet_to_json(wb.Sheets['TRABAJADORES'], {header: 1}).slice(1).forEach(f => { 
-          if(f[0]){
-              let dni = String(f[0]).trim().replace(/\D/g,'').padStart(8,'0');
-              let nombre = String(f[1]||"").trim();
-              let cat = String(f[2]||"OBRERO").toUpperCase().trim();
-              let vip = f[3]?String(f[3]).trim():"";
-              trab[dni] = {nombre: nombre, categoria: cat, vip: vip};
-              
-              if (vip !== "") { preVips[dni] = {nombre: nombre, categoria: cat, comedor: vip}; }
-          }
-      }); }
-      
-      let updates = {};
-      updates['evento/datos_iniciales'] = { 
-          limites: lim, 
-          horaInicio: isoInicio, 
-          horaFin: isoFin, 
-          horaInicioTxt: hInicioTxt,
-          horaFinTxt: hFinTxt,
-          sistemaForzado: null 
-      };
-      updates['evento/trabajadores'] = trab; 
-      updates['evento/vips_pendientes'] = preVips; 
-      
-      db.ref().update(updates).then(() => alert("Archivo Excel procesado. Base de datos hiper-optimizada."));
-    } catch (er) { alert("Error al leer Excel. Asegura que tenga las 3 pestañas."); }
-  }; reader.readAsArrayBuffer(file);
-}
+      return;
+    }
 
-function evaluarEstadoActual() {
-    if (sistemaForzado === true) return true;
-    if (sistemaForzado === false) return false;
-    if (!horaInicio || !horaFin) return false;
     const ahora = new Date();
-    const fInicio = new Date(horaInicio);
-    const fFin = new Date(horaFin);
-    return (ahora >= fInicio && ahora <= fFin);
-}
+    const f = ahora.toLocaleDateString('es-PE') + ' ' +
+              ahora.toTimeString().slice(0, 8);
 
-function setEstadoSistema(estadoDeseado) {
-    if (estadoDeseado) { if(confirm("¿Seguro que deseas HABILITAR el sistema ahora mismo?")) { db.ref('evento/datos_iniciales/sistemaForzado').set(true); } } 
-    else { if(confirm("¿Seguro que deseas CERRAR el sistema ahora mismo?")) { db.ref('evento/datos_iniciales/sistemaForzado').set(false); } }
-}
+    await db.ref('evento/elecciones/' + usr.dni).set({
+      nombre:    usr.nombre,
+      categoria: usr.categoria,
+      comedor:   comedorElegido,
+      fecha:     f,
+      timestamp: firebase.database.ServerValue.TIMESTAMP
+    });
 
-function actualizarUIControlSistema() {
-  const activo = evaluarEstadoActual(), bdg = document.getElementById('status-display'), txt = document.getElementById('status-text'), btnAbrir = document.getElementById('btn-abrir'), btnCerrar = document.getElementById('btn-cerrar');
-  if (activo) { 
-    bdg.className = "status-badge status-open"; txt.textContent = "Sistema Abierto"; 
-    btnAbrir.textContent = "✓ Está Abierto"; btnAbrir.disabled = true; btnAbrir.style.opacity = "0.6"; btnAbrir.style.cursor = "default";
-    btnCerrar.textContent = "¿Deseas Cerrar?"; btnCerrar.disabled = false; btnCerrar.style.opacity = "1"; btnCerrar.style.cursor = "pointer";
-  } else { 
-    bdg.className = "status-badge status-closed"; txt.textContent = "Sistema Cerrado"; 
-    btnAbrir.textContent = "¿Quieres Habilitar?"; btnAbrir.disabled = false; btnAbrir.style.opacity = "1"; btnAbrir.style.cursor = "pointer";
-    btnCerrar.textContent = "✕ Está Cerrado"; btnCerrar.disabled = true; btnCerrar.style.opacity = "0.6"; btnCerrar.style.cursor = "default";
+    if (esModoVIP) {
+      await db.ref('evento/vips_pendientes/' + usr.dni).remove();
+    }
+
+    if (!esModoVIP) btn.textContent = 'Confirmar Elección';
+    if (unsubConteos) db.ref('evento/conteos').off('value', unsubConteos);
+
+    document.getElementById('exito-comedor').textContent = comedorElegido;
+    document.getElementById('exito-nombre').textContent  = usr.nombre;
+    document.getElementById('exito-dni').textContent     = usr.dni;
+    document.getElementById('exito-cat').textContent     = usr.categoria;
+    document.getElementById('exito-hora').innerHTML =
+      'Registrado el <strong>' + f + '</strong>';
+
+    document.getElementById('ticket-bg-exito').textContent =
+      (usr.dni + ' ').repeat(150);
+
+    limpiarRelojes();
+    _relojExito = setInterval(() => {
+      document.getElementById('live-clock-exito').textContent =
+        new Date().toLocaleTimeString('es-PE');
+    }, 1000);
+
+    confirmando = false;
+    comedorSel  = '';
+    show('sec-exito');
+
+    if (esModoVIP) {
+      document.getElementById('btn-continuar').textContent = 'Continuar';
+      document.getElementById('btn-continuar').disabled    = false;
+      document.getElementById('card-header').style.display = 'none';
+    }
+
+  } catch (e) {
+    confirmando = false;
+    if (!esModoVIP) {
+      btn.textContent = 'Confirmar Elección';
+      btn.disabled    = e.message === 'TIMEOUT' ? false : false;
+      setErr('err-com',
+        e.message === 'TIMEOUT'
+          ? 'La conexión está lenta. Vuelve a presionar Confirmar.'
+          : 'Error de red. Intenta de nuevo.');
+    } else {
+      document.getElementById('btn-continuar').textContent = 'Continuar';
+      document.getElementById('btn-continuar').disabled    = false;
+      setErr('err-dni', 'Error de red al procesar. Intenta de nuevo.');
+    }
   }
 }
 
-function limpiarRegistros() { 
-  if(evaluarEstadoActual()){ alert("Primero debes CERRAR el sistema para poder resetear."); return; } 
-  if(prompt("Escribe 'BORRAR' para limpiar ABSOLUTAMENTE TODO:") === 'BORRAR'){
-      db.ref('evento').remove().then(() => { document.getElementById('excel-file').value = ""; alert("Sistema totalmente limpio y reseteado."); });
-  } 
+// ══════════════════════════════════════════════════════════════
+//  EXPULSIÓN AUTOMÁTICA
+// ══════════════════════════════════════════════════════════════
+function activarExpulsion(c) {
+  document.getElementById('btn-elegir').disabled = true;
+  document.querySelectorAll('.comedor-item').forEach(el =>
+    el.classList.remove('sel')
+  );
+  mostrarCountdown(5, c);
+  setErr('err-com', '"' + c + '" se llenó. Elige otro.');
 }
 
-function actualizarConteos(conteos) {
-  const grid = document.getElementById('comedores-grid'); grid.innerHTML = '';
-  Object.entries(LIMITES).forEach(([n, m]) => {
-    const d = conteos[n]||{}, uO = d.obrero||0, uE = d.empleado||0, lO = m.obrero||0, lE = m.empleado||0, t = uO+uE, lT = lO+lE, p = lT>0?Math.round(t/lT*100):0, c = p>=100?'fill-full':p>=80?'fill-warn':'fill-ok';
-    const card = document.createElement('div'); card.className = 'comedor-card';
-    card.innerHTML = `<div class="comedor-nombre">${n}</div>
-      <div class="progress-row"><div class="progress-label"><span>Obreros</span><span>${uO} / ${lO}</span></div><div class="progress-bar-bg"><div class="progress-fill fill-ok" style="width:${lO>0?Math.min(100,uO/lO*100):0}%"></div></div></div>
-      <div class="progress-row"><div class="progress-label"><span>Empleados</span><span>${uE} / ${lE}</span></div><div class="progress-bar-bg"><div class="progress-fill fill-ok" style="width:${lE>0?Math.min(100,uE/lE*100):0}%"></div></div></div>
-      <div class="comedor-total">Total: <strong>${t}</strong> de ${lT} · ${p}% ocupado<div class="progress-bar-bg" style="margin-top:6px"><div class="progress-fill ${c}" style="width:${Math.min(100,p)}%"></div></div></div>`;
-    grid.appendChild(card);
-  }); document.getElementById('stat-hora').textContent = new Date().toTimeString().slice(0, 8);
+function mostrarCountdown(s, c) {
+  detenerCountdown();
+  document.getElementById('expulsion-msg').textContent =
+    '"' + c + '" se llenó. Elige otro en:';
+  document.getElementById('countdown-num').textContent = s;
+  document.getElementById('expulsion-box').style.display = 'block';
+
+  const ring = document.getElementById('ring-fg');
+  const circ = 2 * Math.PI * 27;
+  ring.style.strokeDasharray  = circ;
+  ring.style.strokeDashoffset = '0';
+  void ring.getBoundingClientRect();
+  ring.style.strokeDashoffset = String(circ);
+
+  let r = s;
+  timerCountdown = setInterval(() => {
+    r--;
+    document.getElementById('countdown-num').textContent = r;
+    if (r <= 0) { detenerCountdown(); clrErr('err-com'); }
+  }, 1000);
 }
 
-function actualizarElecciones(el) {
-  todosLosRegistros = Object.entries(el)
-    .map(([dni, r]) => ({ dni, ...r }))
-    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-  const t = todosLosRegistros.length;
-  const o = todosLosRegistros.filter(r => r.categoria === 'OBRERO').length;
-  document.getElementById('stat-total').textContent = t; 
-  document.getElementById('stat-obreros').textContent = o; 
-  document.getElementById('stat-empleados').textContent = t - o; 
-
-  const dnisRegistrados = new Set(todosLosRegistros.map(r => r.dni));
-  const faltantes = Object.entries(TRABAJADORES)
-    .filter(([dni]) => !dnisRegistrados.has(dni))
-    .map(([dni, datos]) => ({ dni, ...datos }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre));
-
-  document.getElementById('count-faltantes').textContent = faltantes.length;
-  renderizarFaltantes(faltantes);
-  filtrarTabla();
+function detenerCountdown() {
+  if (timerCountdown) { clearInterval(timerCountdown); timerCountdown = null; }
+  document.getElementById('expulsion-box').style.display = 'none';
 }
 
-function renderizarFaltantes(lista) {
-  const q = (document.getElementById('search-faltantes')?.value || '').toLowerCase();
-  const f = q ? lista.filter(r => r.nombre?.toLowerCase().includes(q) || r.dni?.includes(q)) : lista;
-  const tb = document.getElementById('tabla-faltantes');
-  tb.innerHTML = '';
-  if(!f.length) { tb.innerHTML = `<tr><td colspan="4" class="empty">Todos han elegido</td></tr>`; return; }
-  f.forEach((r, i) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${i + 1}</td><td style="font-weight:600">${r.dni}</td><td>${r.nombre || '—'}</td><td><span class="badge badge-${(r.categoria||'obrero').toLowerCase()}">${r.categoria || '—'}</span></td>`;
-    tb.appendChild(tr);
-  });
+// ══════════════════════════════════════════════════════════════
+//  NAVEGACIÓN
+// ══════════════════════════════════════════════════════════════
+function regresarInicio() {
+  if (unsubConteos) {
+    db.ref('evento/conteos').off('value', unsubConteos);
+    unsubConteos = null;
+  }
+  detenerCountdown();
+  limpiarRelojes();
+
+  const inpConsulta = document.getElementById('input-dni-consulta');
+  if (inpConsulta) {
+    inpConsulta.value = '';
+    onDniConsultaInput();
+  }
+  clrErr('err-consulta');
+
+  limpiarDni();
+  document.getElementById('card-header').style.display = '';
+
+  if (_sistemaAbierto) {
+    show('sec-dni');
+    document.getElementById('input-dni').focus();
+  } else {
+    show('sec-cerrado');
+  }
 }
 
-function filtrarTabla() {
-  const q = document.getElementById('search-input').value.toLowerCase();
-  const f = q ? todosLosRegistros.filter(r => r.nombre?.toLowerCase().includes(q) || r.dni?.includes(q)) : todosLosRegistros;
-  const tb = document.getElementById('tabla-body'); tb.innerHTML = '';
-  if(!f.length) { tb.innerHTML = `<tr><td colspan="6" class="empty">Sin registros</td></tr>`; return; }
-  f.forEach((r, i) => { const tr = document.createElement('tr'); tr.innerHTML = `<td>${i+1}</td><td style="font-weight:600">${r.dni}</td><td>${r.nombre||'—'}</td><td><span class="badge badge-${(r.categoria||'').toLowerCase()}">${r.categoria||'—'}</span></td><td style="font-weight:600">${r.comedor||'—'}</td><td style="color:var(--ink-soft)">${r.fecha||'—'}</td>`; tb.appendChild(tr); });
-}
-
-function exportarExcel() {
-  if (todosLosRegistros.length === 0 && Object.keys(TRABAJADORES).length === 0) { alert("No hay datos para exportar."); return; }
-  
-  const datosParaExcel = todosLosRegistros.map(r => ({
-    "Fecha_Hora": r.fecha || '',
-    "DNI": r.dni || '',
-    "Nombre": r.nombre || '',
-    "Categoria": r.categoria || '',
-    "Comedor": r.comedor || ''
-  }));
-  const wsRegistros = XLSX.utils.json_to_sheet(datosParaExcel);
-  
-  const dnisRegistrados = new Set(todosLosRegistros.map(r => r.dni));
-  const faltantes = Object.entries(TRABAJADORES)
-    .filter(([dni]) => !dnisRegistrados.has(dni))
-    .map(([dni, datos]) => ({
-      "DNI": dni,
-      "Nombre": datos.nombre || '',
-      "Categoria": datos.categoria || '',
-      "Estado": "SIN ELEGIR"
-    }))
-    .sort((a, b) => a.Nombre.localeCompare(b.Nombre));
-  const wsFaltantes = XLSX.utils.json_to_sheet(faltantes);
-
-  const totalPadron = Object.keys(TRABAJADORES).length;
-  const totalReg = todosLosRegistros.length; 
-  const totalFaltantes = totalPadron - totalReg;
-  const pctReg = totalPadron > 0 ? ((totalReg / totalPadron) * 100).toFixed(1) + '%' : '0%';
-  const pctFalt = totalPadron > 0 ? ((totalFaltantes / totalPadron) * 100).toFixed(1) + '%' : '0%';
-  
-  const textoHorario = document.getElementById('info-horario').textContent.replace('Programado para abrir: ', '');
-  
-  const resumenData = [ 
-    ["CONFIGURACIÓN DEL EVENTO"],
-    ["Horario Programado", textoHorario],
-    [],
-    ["ESTADISTICAS GENERALES DE ASISTENCIA"], 
-    ["ESTADO", "COMENSALES", "PORCENTAJE"], 
-    ["Total Elegidos", totalReg, pctReg], 
-    ["Total Faltantes (Sin elegir)", totalFaltantes, pctFalt], 
-    ["TOTAL EN PADRON", totalPadron, "100%"], 
-    [], 
-    ["DESGLOSE DE OCUPACION POR COMEDOR"], 
-    ["COMEDOR", "CUPOS TOTALES", "CUPOS USADOS", "% DE OCUPACION"] 
-  ];
-  
-  Object.entries(LIMITES).forEach(([nombre, limites]) => { 
-    const limTotal = (limites.obrero || 0) + (limites.empleado || 0);
-    const ocupados = todosLosRegistros.filter(r => r.comedor === nombre).length;
-    const pctOcup = limTotal > 0 ? ((ocupados / limTotal) * 100).toFixed(1) + '%' : '0%'; 
-    resumenData.push([nombre, limTotal, ocupados, pctOcup]); 
-  });
-  
-  const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
-  const workbook = XLSX.utils.book_new();
-  
-  XLSX.utils.book_append_sheet(workbook, wsRegistros, "Registros");
-  XLSX.utils.book_append_sheet(workbook, wsFaltantes, "Sin Elegir"); 
-  XLSX.utils.book_append_sheet(workbook, wsResumen, "Resumen y Porcentajes");
-  
-  XLSX.writeFile(workbook, `Resumen_Comedores_${new Date().toLocaleDateString('es-PE').replace(/\//g,'-')}.xlsx`);
+function volverARegistrar() {
+  usr         = { dni:'', nombre:'', categoria:'', vip:'' };
+  comedorSel  = '';
+  confirmando = false;
+  regresarInicio();
 }
 </script>
 </body>
