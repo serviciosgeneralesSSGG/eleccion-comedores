@@ -70,12 +70,10 @@
       border-radius:var(--radius-md);font-family:'DM Sans',sans-serif;
       font-size:15px;font-weight:700;cursor:pointer;transition:all var(--trans)}
     .btn:active:not(:disabled){transform:scale(.98)}
-    
     .btn-primary{background:var(--ink);color:#fff;margin-top:18px}
     .btn-primary:hover:not(:disabled){background:#222;border-color:#222}
     .btn-primary:disabled{background:var(--surface);color:var(--ink-faint);
       border-color:var(--border);cursor:not-allowed}
-      
     .btn-ghost{background:transparent;color:var(--ink);margin-top:12px}
     .btn-ghost:hover{background:var(--ink);color:#fff}
 
@@ -175,7 +173,6 @@
       transition:border-color var(--trans)}
     .inp-consulta:focus{border-color:var(--ink)}
     
-    /* BOTÓN CONSULTAR CORREGIDO (Color Negro) */
     .btn-consultar{width:100%;padding:12px 16px;border:2px solid var(--ink);
       border-radius:var(--radius-md);font-family:'DM Sans',sans-serif;
       font-size:14px;font-weight:700;cursor:pointer;
@@ -532,6 +529,7 @@ async function consultarTicketCerrado() {
       document.getElementById('card-header').style.display = 'none'; show('sec-ya');
     } else { setErr('err-consulta', 'No registras elección en ninguna Guardia. Consulta con Servicios Generales.'); }
   } catch (e) { setErr('err-consulta', 'Error de red al consultar. Intenta de nuevo.'); }
+  
   btn.textContent = 'Consultar'; btn.disabled = false;
 }
 
@@ -601,7 +599,7 @@ function pintarComedores(conteos) {
   if (comedorSel) document.getElementById('btn-elegir').disabled = false;
 }
 
-// 🛡️ REINTENTOS ANTI-CORTE
+// 🛡️ REINTENTOS ANTI-CORTE: SIN TIMEOUT EXTERNO, SOLO FIREBASE PURO
 async function confirmarEleccion(esModoVIP) {
   if (!comedorSel || confirmando || !guardiaActiva) return; confirmando = true;
   const comedorElegido = comedorSel; const btn = document.getElementById('btn-elegir');
@@ -611,13 +609,12 @@ async function confirmarEleccion(esModoVIP) {
   if (!esModoVIP) { btn.disabled = true; btn.textContent = 'Procesando...'; clrErr('err-com'); }
 
   try {
-    const timeoutP = new Promise((_, rej) => setTimeout(() => rej(new Error('TIMEOUT')), 8000));
-    const txnP = db.ref(`${basePath}/conteos/${comedorElegido}`).transaction(datos => {
+    // Al quitar el Promise.race con timeout, Firebase tomará el control total de la reconexión.
+    const res = await db.ref(`${basePath}/conteos/${comedorElegido}`).transaction(datos => {
         const act = datos || { obrero: 0, empleado: 0 }; const uso = act[campo] || 0;
         if (uso >= limite) return undefined; return { ...act, [campo]: uso + 1 };
       });
 
-    const res = await Promise.race([txnP, timeoutP]);
     if (!res.committed) {
       confirmando = false;
       if (!esModoVIP) { btn.textContent = 'Confirmar Elección'; btn.disabled = false; activarExpulsion(comedorElegido); comedorSel = ''; } 
@@ -636,6 +633,7 @@ async function confirmarEleccion(esModoVIP) {
       try { await db.ref().update(updates); escrito = true; break; } 
       catch (writeErr) { if (intento < 3) await new Promise(r => setTimeout(r, 800 * intento)); }
     }
+    
     if (!escrito) throw new Error('FALLO_TOTAL_RED');
 
     if (!esModoVIP) btn.textContent = 'Confirmar Elección';
@@ -648,8 +646,8 @@ async function confirmarEleccion(esModoVIP) {
     if (esModoVIP) { document.getElementById('btn-continuar').textContent = 'Continuar'; document.getElementById('btn-continuar').disabled = false; document.getElementById('card-header').style.display = 'none'; }
   } catch (e) {
     confirmando = false;
-    if (!esModoVIP) { btn.textContent = 'Confirmar Elección'; btn.disabled = false; setErr('err-com', 'El internet está inestable. Por favor presiona Confirmar de nuevo.'); } 
-    else { document.getElementById('btn-continuar').textContent = 'Continuar'; document.getElementById('btn-continuar').disabled = false; setErr('err-dni', 'Error de red al procesar.'); }
+    if (!esModoVIP) { btn.textContent = 'Confirmar Elección'; btn.disabled = false; setErr('err-com', 'Ocurrió un error. Verifica que el sistema siga abierto.'); } 
+    else { document.getElementById('btn-continuar').textContent = 'Continuar'; document.getElementById('btn-continuar').disabled = false; setErr('err-dni', 'Error al procesar VIP.'); }
   }
 }
 
