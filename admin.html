@@ -33,24 +33,10 @@
     .control-flex{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
     
     .btn{padding:10px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.2s;white-space:nowrap;font-family:'DM Sans',sans-serif;} 
-    .btn-blue{background:var(--info);color:#fff;} .btn-green{background:var(--ok);color:#fff;} .btn-red{background:var(--accent);color:#fff;} .btn-ghost{background:transparent;color:#fff;border:1px solid var(--border);padding:6px 12px;font-size:12px;}
+    .btn-blue{background:var(--info);color:#fff;} .btn-green{background:var(--ok);color:#fff;} .btn-red{background:#EF4444;color:#fff;} .btn-ghost{background:transparent;color:#fff;border:1px solid var(--border);padding:6px 12px;font-size:12px;}
     
-    /* ESTILOS PARA LOS BOTONES EN UNA SOLA FILA PERFECTA */
-    .btn-action-row {
-      display: flex;
-      gap: 8px;
-      width: 100%;
-    }
-    .btn-action-row button {
-      flex: 1; /* Divide el espacio exactamente entre los 4 botones */
-      min-width: 0; /* Permite que el texto se acorte si la pantalla es pequeña */
-      padding: 12px 4px;
-      font-size: 12px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      text-align: center;
-    }
+    .btn-action-row { display: flex; gap: 8px; width: 100%; align-items: center;}
+    .btn-action-row button { flex: 1; min-width: 0; padding: 12px 4px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
 
     input[type="file"]{font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink);outline:none;width:100%;max-width:240px;}
     
@@ -94,12 +80,12 @@
       <button class="tab-btn" id="tab-GUARDIA_B" onclick="seleccionarGuardia('GUARDIA_B')">📂 Guardia B</button>
       <button class="tab-btn" id="tab-GUARDIA_C" onclick="seleccionarGuardia('GUARDIA_C')">📂 Guardia C</button>
       
-      <!-- BOTÓN DE BORRADO GENERAL A LA DERECHA -->
       <button class="btn btn-red" style="margin-left:auto; display:flex; align-items:center; gap:6px;" onclick="limpiarTodoElSistema()">
         ⚠️ Borrado General (3 Guardias)
       </button>
     </div>
 
+    <!-- PANELES DE OPERACIÓN PRINCIPAL -->
     <div class="control-panel">
       <!-- 1 UN SOLO INPUT PARA SUBIR O RESTAURAR -->
       <div class="control-group">
@@ -107,17 +93,18 @@
         <div class="control-flex">
           <input type="file" id="excel-file" accept=".xlsx, .xls" />
           <button class="btn btn-blue" onclick="procesarExcel()">Cargar a Firebase</button>
-          <button class="btn btn-green" onclick="procesarResumenHistorico()">Restaurar</button>
+          <button class="btn btn-green" style="background:#16A34A;" onclick="procesarResumenHistoricoArchivoUnico()">Restaurar</button>
         </div>
         <small style="color:var(--ink-soft);font-size:11px;" id="info-horario">Sube tu padrón ("Comensales_guardia_X.xlsx") o el Histórico ("Resumen_Comedores_Guardia X.xlsx").</small>
       </div>
       
-      <!-- 2 ACCIONES MANUALES ESTILIZADAS EN UNA SOLA FILA -->
+      <!-- 2 ACCIONES MANUALES SIN SCROLL -->
       <div class="control-group">
         <div class="control-title">2. Acciones Manuales (<span class="lbl-guardia-activa"></span>)</div>
         <div class="btn-action-row">
-          <button id="btn-abrir" class="btn btn-green" onclick="setEstadoSistema(true)">Habilitar Manual</button>
-          <button id="btn-cerrar" class="btn btn-red" onclick="setEstadoSistema(false)">✕ Cerrado</button>
+          <button id="btn-abrir" class="btn btn-green" onclick="setEstadoSistema(true)">¿Quieres Habilitar?</button>
+          <button id="btn-cerrar" class="btn btn-red" onclick="setEstadoSistema(false)">✕ Está Cerrado</button>
+          
           <button class="btn" style="background:#0F172A; color:#fff;" onclick="restablecerElecciones()">Restablecer</button>
           <button id="btn-borrar-guardia" class="btn" style="background:#0F172A; color:#fff;" onclick="borrarGuardiaCompleta()">Borrar G. A</button>
         </div>
@@ -209,10 +196,7 @@ function seleccionarGuardia(g) {
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
   document.getElementById('tab-' + g).classList.add('active');
   document.querySelectorAll('.lbl-guardia-activa').forEach(el => el.textContent = g.replace('_', ' '));
-  
-  // Cambiamos el texto dinámicamente para que sea corto ("Borrar G. A") y entre perfecto
   document.getElementById('btn-borrar-guardia').textContent = `Borrar ${g.replace('GUARDIA_', 'G. ')}`;
-  
   iniciarListenersGuardia();
 }
 
@@ -251,9 +235,9 @@ function iniciarListenersGuardia() {
 }
 
 // ==========================================
-// RESTAURAR RESÚMENES (USANDO EL MISMO INPUT)
+// RESTAURAR RESÚMENES 
 // ==========================================
-function procesarResumenHistorico() {
+function procesarResumenHistoricoArchivoUnico() {
   const file = document.getElementById('excel-file').files[0]; 
   if (!file) { alert("Selecciona primero un archivo 'Resumen_Comedores_...' descargado previamente."); return; }
   
@@ -304,9 +288,6 @@ function procesarResumenHistorico() {
   reader.readAsArrayBuffer(file);
 }
 
-// ==========================================
-// BOTÓN: RESTABLECER ELECCIONES
-// ==========================================
 function restablecerElecciones() {
   const nombre = guardiaSeleccionada.replace('_', ' ');
   if(evaluarEstadoActual()) { alert(`Primero debes CERRAR la ${nombre} para poder restablecer.`); return; } 
@@ -319,9 +300,6 @@ function restablecerElecciones() {
   }
 }
 
-// ==========================================
-// BOTÓN: BORRAR GUARDIA COMPLETA
-// ==========================================
 function borrarGuardiaCompleta() {
   const nombre = guardiaSeleccionada.replace('_', ' ');
   if(evaluarEstadoActual()) { alert(`Primero debes CERRAR la ${nombre} para poder borrar.`); return; } 
@@ -334,9 +312,6 @@ function borrarGuardiaCompleta() {
   }
 }
 
-// ==========================================
-// BOTÓN ROJO BORRADO GENERAL (Las 3 Guardias)
-// ==========================================
 function limpiarTodoElSistema() {
   if(prompt(`Escribe 'BORRAR' para limpiar ABSOLUTAMENTE TODO (Las 3 guardias se resetearán por completo):`) === 'BORRAR'){
       db.ref('evento').remove().then(() => { 
@@ -393,18 +368,50 @@ async function procesarVipAutomatico(dni, datos, cat, limite, usoReal) {
 
 function esEmpAdmin(cat) { return (cat || '').toUpperCase() === 'EMPLEADO' || (cat || '').toUpperCase() === 'PRACTICANTE'; }
 
-function convertirFechaExcelAISO(fechaStr) {
-    if (!fechaStr) return ""; let partes = fechaStr.trim().replace(/\s+/g, ' ').split(" ");
-    if (partes.length < 2) return fechaStr; let fecha = partes[0].split(/[/-]/), horaStr = partes[1].split(":"), ampm = partes[2] ? partes[2].toUpperCase() : "";
-    if (fecha.length === 3) {
-        let dia = fecha[0], mes = fecha[1], anio = fecha[2];
-        if (dia.length === 4) { anio = fecha[0]; dia = fecha[2]; }
-        dia = dia.padStart(2, '0'); mes = mes.padStart(2, '0');
-        if (anio.length === 2) anio = "20" + anio;
-        let hr = parseInt(horaStr[0], 10), min = (horaStr[1] || "00").padStart(2, '0');
-        if (ampm === "PM" && hr < 12) hr += 12; if (ampm === "AM" && hr === 12) hr = 0;
-        return `${anio}-${mes}-${dia}T${hr.toString().padStart(2, '0')}:${min}:00`;
-    } return fechaStr;
+// ==========================================
+// FUNCIÓN PARA LEER FECHA (Col B) y HORA (Col C)
+// ==========================================
+function combinarFechaYHora(fechaExcel, horaExcel) {
+    if(!fechaExcel) return "";
+    let dateObj;
+    
+    if (fechaExcel instanceof Date) {
+        dateObj = new Date(fechaExcel);
+    } else {
+        let partes = String(fechaExcel).trim().split(/[/-]/);
+        if(partes.length === 3) {
+            let d = partes[0], m = partes[1], y = partes[2];
+            if(d.length === 4) { y = partes[0]; d = partes[2]; } 
+            if(y.length === 2) y = "20" + y;
+            dateObj = new Date(`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}T00:00:00`);
+        } else {
+            return String(fechaExcel); 
+        }
+    }
+
+    let hrs = 0, mins = 0;
+    if (horaExcel) {
+        if (horaExcel instanceof Date) {
+            hrs = horaExcel.getHours(); mins = horaExcel.getMinutes();
+        } else {
+            let timeStr = String(horaExcel).trim();
+            if(!isNaN(timeStr) && timeStr.indexOf(':') === -1) {
+                let totalSecs = Math.round(parseFloat(timeStr) * 86400);
+                hrs = Math.floor(totalSecs / 3600); mins = Math.floor((totalSecs % 3600) / 60);
+            } else {
+                let timeParts = timeStr.split(':');
+                if(timeParts.length >= 2) { hrs = parseInt(timeParts[0], 10); mins = parseInt(timeParts[1], 10); }
+            }
+        }
+    }
+
+    let yyyy = dateObj.getFullYear();
+    let mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+    let dd = String(dateObj.getDate()).padStart(2, '0');
+    let hh = String(hrs).padStart(2, '0');
+    let minStr = String(mins).padStart(2, '0');
+    
+    return `${yyyy}-${mm}-${dd}T${hh}:${minStr}:00`;
 }
 
 function procesarExcel() {
@@ -412,13 +419,19 @@ function procesarExcel() {
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
-      const wb = XLSX.read(new Uint8Array(e.target.result), {type: 'array', cellDates: true, dateNF: 'yyyy-mm-dd hh:mm'}); 
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type: 'array', cellDates: true}); 
       let trab = {}, lim = {}, preVips = {}, hInicioTxt = "", hFinTxt = "", isoInicio = "", isoFin = "";
       
       if (wb.Sheets['CONFIGURACION']) {
-        XLSX.utils.sheet_to_json(wb.Sheets['CONFIGURACION'], {header: 1, raw: false}).forEach(f => { 
-            if(f[0] === 'INICIO' && f[1]) { hInicioTxt = String(f[1]).trim(); isoInicio = convertirFechaExcelAISO(hInicioTxt); }
-            if(f[0] === 'FIN' && f[1]) { hFinTxt = String(f[1]).trim(); isoFin = convertirFechaExcelAISO(hFinTxt); }
+        XLSX.utils.sheet_to_json(wb.Sheets['CONFIGURACION'], {header: 1, raw: false, dateNF: 'dd/mm/yyyy'}).forEach(f => { 
+            if(f[0] === 'INICIO' && f[1]) { 
+                hInicioTxt = String(f[1]).trim() + (f[2] ? ' ' + String(f[2]).trim() : ''); 
+                isoInicio = combinarFechaYHora(f[1], f[2]); 
+            }
+            if(f[0] === 'FIN' && f[1]) { 
+                hFinTxt = String(f[1]).trim() + (f[2] ? ' ' + String(f[2]).trim() : ''); 
+                isoFin = combinarFechaYHora(f[1], f[2]); 
+            }
         });
       }
       if (wb.Sheets['COMEDORES']) { XLSX.utils.sheet_to_json(wb.Sheets['COMEDORES'], {header: 1}).slice(1).forEach(f => { if(f[0]) lim[String(f[0]).trim()] = {obrero: parseInt(f[1])||0, empleado: parseInt(f[2])||0}; }); }
@@ -437,11 +450,10 @@ function procesarExcel() {
           alert(`Excel cargado exitosamente en ${guardiaSeleccionada.replace('_', ' ')}.`);
           document.getElementById('excel-file').value = '';
       });
-    } catch (er) { alert("Error al leer Excel. Asegura que tenga las pestañas correctas."); }
+    } catch (er) { alert("Error al leer Excel. Asegura que tenga las pestañas correctas."); console.log(er); }
   }; reader.readAsArrayBuffer(file);
 }
 
-// Actualiza los textos de los botones dinámicamente según el estado
 function evaluarEstadoActual() {
     if (sistemaForzado === true) return true; if (sistemaForzado === false) return false;
     if (!horaInicio || !horaFin) return false;
@@ -457,11 +469,11 @@ function setEstadoSistema(estadoDeseado) {
 function actualizarUIControlSistema() {
   const activo = evaluarEstadoActual(), btnAbrir = document.getElementById('btn-abrir'), btnCerrar = document.getElementById('btn-cerrar');
   if (activo) { 
-    btnAbrir.textContent = "✓ Abierto"; btnAbrir.disabled = true; btnAbrir.style.opacity = "0.6"; btnAbrir.style.cursor = "default";
-    btnCerrar.textContent = "Cerrar Manual"; btnCerrar.disabled = false; btnCerrar.style.opacity = "1"; btnCerrar.style.cursor = "pointer";
+    btnAbrir.textContent = "¿Quieres Habilitar?"; btnAbrir.disabled = true; btnAbrir.style.opacity = "0.6"; btnAbrir.style.cursor = "default";
+    btnCerrar.textContent = "✕ Cerrar Manual"; btnCerrar.disabled = false; btnCerrar.style.opacity = "1"; btnCerrar.style.cursor = "pointer";
   } else { 
-    btnAbrir.textContent = "Habilitar Manual"; btnAbrir.disabled = false; btnAbrir.style.opacity = "1"; btnAbrir.style.cursor = "pointer";
-    btnCerrar.textContent = "✕ Cerrado"; btnCerrar.disabled = true; btnCerrar.style.opacity = "0.6"; btnCerrar.style.cursor = "default";
+    btnAbrir.textContent = "¿Quieres Habilitar?"; btnAbrir.disabled = false; btnAbrir.style.opacity = "1"; btnAbrir.style.cursor = "pointer";
+    btnCerrar.textContent = "✕ Está Cerrado"; btnCerrar.disabled = true; btnCerrar.style.opacity = "0.6"; btnCerrar.style.cursor = "default";
   }
 }
 
