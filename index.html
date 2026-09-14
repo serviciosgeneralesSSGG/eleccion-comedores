@@ -199,7 +199,7 @@
       </div>
     </div>
 
-    <!-- CERRADO + MÓDULO DE CONSULTA UNIVERSAL -->
+    <!-- CERRADO + MÓDULO DE CONSULTA -->
     <div id="sec-cerrado" class="sec">
       <div class="state-block ani">
         <div class="state-icon red">
@@ -212,7 +212,7 @@
         <h2>Sistema Cerrado</h2>
         <p id="msg-cerrado"></p>
 
-        <!-- Módulo de consulta universal Fase 2 -->
+        <!-- Buscador Universal Fase 2 -->
         <div class="consulta-box">
           <span class="consulta-title">¿Olvidaste tu comedor? Consulta aquí</span>
           <div class="dni-wrap">
@@ -226,7 +226,7 @@
           </div>
           <button id="btn-consultar" class="btn-consultar"
             onclick="consultarTicketCerrado()" disabled>
-            Consultar mi Ticket
+            Consultar
           </button>
           <div id="err-consulta" class="alert err">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
@@ -397,8 +397,7 @@ let unsubConteos   = null;
 let timerCountdown = null;
 
 let guardiaActiva  = null;
-let refDatosIni    = null;
-let cacheDatosIni  = null; 
+let cacheGuardias  = { GUARDIA_A: null, GUARDIA_B: null, GUARDIA_C: null }; 
 let timerReloj     = null; 
 
 let serverTimeOffset = 0; // HORA MUNDIAL GOOGLE
@@ -428,63 +427,66 @@ function cargarSistema() {
       serverTimeOffset = snap.val() || 0;
     });
 
-    db.ref('evento/config_global/guardia_activa').on('value', snap => {
-        guardiaActiva = snap.val();
-        if (!guardiaActiva) {
-            document.getElementById('msg-cerrado').textContent = "Sistema en mantenimiento. No hay ninguna guardia activa asignada por el momento.";
-            show('sec-cerrado'); return;
-        }
-        conectarAGuardia(guardiaActiva);
+    // Detectar automáticamente qué guardia está abierta leyendo las 3
+    ['GUARDIA_A', 'GUARDIA_B', 'GUARDIA_C'].forEach(g => {
+        db.ref(`evento/guardias/${g}/datos_iniciales`).on('value', snap => {
+            cacheGuardias[g] = snap.val() || null;
+            evaluarRelojInteligente();
+        });
     });
+
+    if(timerReloj) clearInterval(timerReloj);
+    // PRECISIÓN MILITAR: Revisa la hora cada 1000ms
+    timerReloj = setInterval(evaluarRelojInteligente, 1000);
+
   } catch (e) {
     document.getElementById('msg-cerrado').textContent = 'No se pudo conectar. Verifica tu internet e intenta de nuevo.';
     document.getElementById('btn-reintentar').style.display = 'block'; show('sec-cerrado');
   }
 }
 
-function conectarAGuardia(g) {
-    if (refDatosIni) db.ref(refDatosIni).off();
-    refDatosIni = `evento/guardias/${g}/datos_iniciales`;
-    
-    if(timerReloj) clearInterval(timerReloj);
-    // PRECISIÓN MILITAR: Revisa la hora cada 1000ms
-    timerReloj = setInterval(evaluarRelojInteligente, 1000);
-
-    db.ref(refDatosIni).on('value', snap => {
-      cacheDatosIni = snap.val() || {};
-      LIMITES = cacheDatosIni.limites || {};
-      evaluarRelojInteligente(); 
-    });
-}
-
-// ⏰ EL RELOJ INTELIGENTE ANTI-TRAMPAS
+// ⏰ EL RELOJ INTELIGENTE AUTODETECTOR
 function evaluarRelojInteligente() {
-    if (!cacheDatosIni) return;
-    const data = cacheDatosIni;
-    let abierto = false;
+    let guardiaEncontrada = null;
+    const ahora = new Date(Date.now() + serverTimeOffset);
 
-    if (data.sistemaForzado === true) { abierto = true; }
-    else if (data.sistemaForzado === false) { abierto = false; }
-    else if (data.horaInicio && data.horaFin) {
-        // HORA REAL MUNDIAL (Ignora el reloj del celular del usuario)
-        const tiempoRealMs = Date.now() + serverTimeOffset;
-        const ahora = new Date(tiempoRealMs);
-        const fInicio = new Date(data.horaInicio);
-        const fFin = new Date(data.horaFin);
-        if (ahora >= fInicio && ahora <= fFin) abierto = true;
+    // Revisa A, B y C para ver cuál está abierta según el Admin o el Excel
+    for (let g of ['GUARDIA_A', 'GUARDIA_B', 'GUARDIA_C']) {
+        const data = cacheGuardias[g];
+        if (!data) continue;
+
+        let abierto = false;
+        if (data.sistemaForzado === true) abierto = true;
+        else if (data.sistemaForzado === false) abierto = false;
+        else if (data.horaInicio && data.horaFin) {
+            if (ahora >= new Date(data.horaInicio) && ahora <= new Date(data.horaFin)) {
+                abierto = true;
+            }
+        }
+        if (abierto) {
+            guardiaEncontrada = g;
+            break; // Si encuentra una abierta, se queda con esa.
+        }
     }
 
-    if (abierto !== _sistemaAbierto) {
-        _sistemaAbierto = abierto;
-        if (!abierto) {
-            document.getElementById('msg-cerrado').textContent = data.mensajeSistema || `El acceso para la ${guardiaActiva.replace('_', ' ')} se encuentra inactivo. Consulte los horarios oficiales.`;
+    const cambioEstado = (guardiaEncontrada !== guardiaActiva);
+    guardiaActiva = guardiaEncontrada;
+    _sistemaAbierto = (guardiaActiva !== null);
+
+    if (cambioEstado || (!_sistemaAbierto && document.getElementById('sec-loader').classList.contains('on'))) {
+        if (!_sistemaAbierto) {
+            // El mensaje solicitado si todo está cerrado
+            document.getElementById('msg-cerrado').textContent = "El acceso al sistema se encuentra temporalmente inactivo. Por favor, manténgase atento a los canales oficiales de comunicación, donde se informará oportunamente el horario de apertura para la selección de su comedor.";
             const viendoTicket = document.getElementById('sec-exito').classList.contains('on') || document.getElementById('sec-ya').classList.contains('on');
             if (!viendoTicket) show('sec-cerrado');
         } else {
+            LIMITES = cacheGuardias[guardiaActiva].limites || {};
             if (document.getElementById('sec-loader').classList.contains('on') || document.getElementById('sec-cerrado').classList.contains('on')) {
                 show('sec-dni'); document.getElementById('input-dni').focus();
             }
         }
+    } else if (_sistemaAbierto) {
+        LIMITES = cacheGuardias[guardiaActiva].limites || {};
     }
 }
 
@@ -509,9 +511,8 @@ async function consultarTicketCerrado() {
   clrErr('err-consulta'); const dni = document.getElementById('input-dni-consulta').value.padStart(8, '0');
   const btn = document.getElementById('btn-consultar'); btn.disabled = true; btn.textContent = 'Buscando...';
   try {
-    const listaGuardias = ['GUARDIA_A', 'GUARDIA_B', 'GUARDIA_C'];
     let encontrado = null, guardiaLocalizada = '';
-    for (let g of listaGuardias) {
+    for (let g of ['GUARDIA_A', 'GUARDIA_B', 'GUARDIA_C']) {
         const snap = await db.ref(`evento/guardias/${g}/elecciones/${dni}`).once('value');
         if (snap.exists()) { encontrado = snap.val(); guardiaLocalizada = g; break; }
     }
@@ -526,11 +527,12 @@ async function consultarTicketCerrado() {
       document.getElementById('card-header').style.display = 'none'; show('sec-ya');
     } else { setErr('err-consulta', 'No registras elección. Consulta con Servicios Generales.'); }
   } catch (e) { setErr('err-consulta', 'Error de red al consultar. Intenta de nuevo.'); }
-  btn.textContent = 'Consultar mi Ticket'; btn.disabled = false;
+  btn.textContent = 'Consultar'; btn.disabled = false;
 }
 
 // 🛡️ VALIDAR Y ELEGIR
 async function validarTrabajador() {
+  if (!guardiaActiva) return; // Por seguridad si se cierra mientras carga
   clrErr('err-dni'); let dni = document.getElementById('input-dni').value.padStart(8, '0');
   const btn = document.getElementById('btn-continuar'); btn.disabled = true; btn.textContent = 'Verificando...';
   try {
@@ -566,8 +568,8 @@ async function validarTrabajador() {
 function esEmp(cat) { const c = (cat || '').toUpperCase(); return c === 'EMPLEADO' || c === 'PRACTICANTE'; }
 
 function suscribirConteos() {
-  if (unsubConteos) db.ref(`evento/guardias/${guardiaActiva}/conteos`).off('value', unsubConteos);
-  unsubConteos = db.ref(`evento/guardias/${guardiaActiva}/conteos`).on('value', snap => { pintarComedores(snap.val() || {}); });
+  if (unsubConteos && guardiaActiva) db.ref(`evento/guardias/${guardiaActiva}/conteos`).off('value', unsubConteos);
+  if (guardiaActiva) unsubConteos = db.ref(`evento/guardias/${guardiaActiva}/conteos`).on('value', snap => { pintarComedores(snap.val() || {}); });
 }
 
 function pintarComedores(conteos) {
@@ -596,7 +598,7 @@ function pintarComedores(conteos) {
 
 // 🛡️ REINTENTOS ANTI-CORTE
 async function confirmarEleccion(esModoVIP) {
-  if (!comedorSel || confirmando) return; confirmando = true;
+  if (!comedorSel || confirmando || !guardiaActiva) return; confirmando = true;
   const comedorElegido = comedorSel; const btn = document.getElementById('btn-elegir');
   const campo = esEmp(usr.categoria) ? 'empleado' : 'obrero'; const limite = (LIMITES[comedorElegido] || {})[campo] || 0;
   const basePath = `evento/guardias/${guardiaActiva}`;
