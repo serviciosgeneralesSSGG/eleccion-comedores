@@ -159,6 +159,19 @@ let cacheGuardias = { GUARDIA_A: null, GUARDIA_B: null, GUARDIA_C: null };
 let LIMITES = {}, TRABAJADORES = {}, todosLosRegistros = [], sistemaForzado = null, horaInicio = "", horaFin = "";
 let vipsPendientes = {}, ELECCIONES_ACTUALES = {};
 
+// Escapa texto antes de insertarlo en innerHTML — evita XSS si un nombre/campo
+// del Excel (o cualquier dato leído desde Firebase) contiene HTML/JS.
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+// Sanitiza un valor antes de usarlo como sufijo de clase CSS (ej. badge-obrero)
+// para que no pueda romper el atributo class="" ni inyectar otro atributo.
+function claseSegura(str) {
+  return String(str || '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
   db = firebase.database(); auth = firebase.auth();
@@ -486,7 +499,7 @@ function actualizarConteosVisuales(conteosReales) {
   Object.entries(LIMITES).forEach(([n, m]) => {
     const d = conteosReales[n]||{}, uO = d.obrero||0, uE = d.empleado||0, lO = m.obrero||0, lE = m.empleado||0, t = uO+uE, lT = lO+lE, p = lT>0?Math.round(t/lT*100):0, c = p>=100?'fill-full':p>=80?'fill-warn':'fill-ok';
     const card = document.createElement('div'); card.className = 'comedor-card';
-    card.innerHTML = `<div class="comedor-nombre">${n}</div>
+    card.innerHTML = `<div class="comedor-nombre">${escapeHtml(n)}</div>
       <div class="progress-row"><div class="progress-label"><span>Obreros</span><span>${uO} / ${lO}</span></div><div class="progress-bar-bg"><div class="progress-fill fill-ok" style="width:${lO>0?Math.min(100,uO/lO*100):0}%"></div></div></div>
       <div class="progress-row"><div class="progress-label"><span>Empleados</span><span>${uE} / ${lE}</span></div><div class="progress-bar-bg"><div class="progress-fill fill-ok" style="width:${lE>0?Math.min(100,uE/lE*100):0}%"></div></div></div>
       <div class="comedor-total">Total: <strong>${t}</strong> de ${lT} · ${p}% ocupado<div class="progress-bar-bg" style="margin-top:6px"><div class="progress-fill ${c}" style="width:${Math.min(100,p)}%"></div></div></div>`;
@@ -500,7 +513,7 @@ function renderizarFaltantes() {
   const f = q ? lista.filter(r => r.nombre?.toLowerCase().includes(q) || r.dni?.includes(q)) : lista;
   const tb = document.getElementById('tabla-faltantes'); tb.innerHTML = '';
   if(!f.length) { tb.innerHTML = `<tr><td colspan="4" class="empty">Todos han elegido</td></tr>`; return; }
-  f.forEach((r, i) => { const tr = document.createElement('tr'); tr.innerHTML = `<td>${i + 1}</td><td style="font-weight:600">${r.dni}</td><td>${r.nombre || '—'}</td><td><span class="badge badge-${(r.categoria||'obrero').toLowerCase()}">${r.categoria || '—'}</span></td>`; tb.appendChild(tr); });
+  f.forEach((r, i) => { const tr = document.createElement('tr'); tr.innerHTML = `<td>${i + 1}</td><td style="font-weight:600">${escapeHtml(r.dni)}</td><td>${escapeHtml(r.nombre || '—')}</td><td><span class="badge badge-${claseSegura(r.categoria || 'obrero')}">${escapeHtml(r.categoria || '—')}</span></td>`; tb.appendChild(tr); });
 }
 
 function filtrarTabla() {
@@ -508,7 +521,7 @@ function filtrarTabla() {
   const f = q ? todosLosRegistros.filter(r => r.nombre?.toLowerCase().includes(q) || r.dni?.includes(q)) : todosLosRegistros;
   const tb = document.getElementById('tabla-body'); tb.innerHTML = '';
   if(!f.length) { tb.innerHTML = `<tr><td colspan="6" class="empty">Sin registros</td></tr>`; return; }
-  f.forEach((r, i) => { const tr = document.createElement('tr'); tr.innerHTML = `<td>${i+1}</td><td style="font-weight:600">${r.dni}</td><td>${r.nombre||'—'}</td><td><span class="badge badge-${(r.categoria||'').toLowerCase()}">${r.categoria||'—'}</span></td><td style="font-weight:600">${r.comedor||'—'}</td><td style="color:var(--ink-soft)">${r.fecha||'—'}</td>`; tb.appendChild(tr); });
+  f.forEach((r, i) => { const tr = document.createElement('tr'); tr.innerHTML = `<td>${i+1}</td><td style="font-weight:600">${escapeHtml(r.dni)}</td><td>${escapeHtml(r.nombre||'—')}</td><td><span class="badge badge-${claseSegura(r.categoria || '')}">${escapeHtml(r.categoria||'—')}</span></td><td style="font-weight:600">${escapeHtml(r.comedor||'—')}</td><td style="color:var(--ink-soft)">${escapeHtml(r.fecha||'—')}</td>`; tb.appendChild(tr); });
 }
 
 function exportarExcel() {
