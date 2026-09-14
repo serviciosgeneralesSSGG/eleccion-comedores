@@ -70,10 +70,12 @@
       border-radius:var(--radius-md);font-family:'DM Sans',sans-serif;
       font-size:15px;font-weight:700;cursor:pointer;transition:all var(--trans)}
     .btn:active:not(:disabled){transform:scale(.98)}
+    
     .btn-primary{background:var(--ink);color:#fff;margin-top:18px}
     .btn-primary:hover:not(:disabled){background:#222;border-color:#222}
     .btn-primary:disabled{background:var(--surface);color:var(--ink-faint);
       border-color:var(--border);cursor:not-allowed}
+      
     .btn-ghost{background:transparent;color:var(--ink);margin-top:12px}
     .btn-ghost:hover{background:var(--ink);color:#fff}
 
@@ -172,11 +174,13 @@
       border-radius:var(--radius-md);outline:none;letter-spacing:2px;
       transition:border-color var(--trans)}
     .inp-consulta:focus{border-color:var(--ink)}
+    
+    /* BOTÓN CONSULTAR CORREGIDO (Color Negro) */
     .btn-consultar{width:100%;padding:12px 16px;border:2px solid var(--ink);
       border-radius:var(--radius-md);font-family:'DM Sans',sans-serif;
       font-size:14px;font-weight:700;cursor:pointer;
-      background:var(--surface);color:var(--ink-soft);margin-top:12px;transition:all var(--trans)}
-    .btn-consultar:hover:not(:disabled){background:#F1F5F9; color:var(--ink);}
+      background:var(--ink);color:#fff;margin-top:12px;transition:all var(--trans)}
+    .btn-consultar:hover:not(:disabled){background:#222; border-color:#222;}
     .btn-consultar:disabled{background:var(--surface);color:var(--ink-faint);
       border-color:var(--border);cursor:not-allowed}
 
@@ -199,7 +203,7 @@
       </div>
     </div>
 
-    <!-- CERRADO + MÓDULO DE CONSULTA UNIVERSAL -->
+    <!-- CERRADO + MÓDULO DE CONSULTA -->
     <div id="sec-cerrado" class="sec">
       <div class="state-block ani">
         <div class="state-icon red">
@@ -212,6 +216,7 @@
         <h2>Sistema Cerrado</h2>
         <p id="msg-cerrado"></p>
 
+        <!-- Buscador Universal Fase 2 -->
         <div class="consulta-box">
           <span class="consulta-title">¿Olvidaste tu comedor? Consulta aquí</span>
           <div class="dni-wrap">
@@ -385,7 +390,7 @@
 <script src="config.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════════
-//  ESTADO GLOBAL
+//  ESTADO GLOBAL - FASE 2
 // ══════════════════════════════════════════════════════════════
 let db;
 let LIMITES        = {};
@@ -525,9 +530,8 @@ async function consultarTicketCerrado() {
       document.getElementById('ticket-bg-ya').textContent = (dni + ' ').repeat(150);
       limpiarRelojes(); _relojYa = setInterval(() => { document.getElementById('live-clock-ya').textContent = new Date(Date.now() + serverTimeOffset).toLocaleTimeString('es-PE'); }, 1000);
       document.getElementById('card-header').style.display = 'none'; show('sec-ya');
-    } else { setErr('err-consulta', 'No registras elección. Consulta con Servicios Generales.'); }
+    } else { setErr('err-consulta', 'No registras elección en ninguna Guardia. Consulta con Servicios Generales.'); }
   } catch (e) { setErr('err-consulta', 'Error de red al consultar. Intenta de nuevo.'); }
-  
   btn.textContent = 'Consultar'; btn.disabled = false;
 }
 
