@@ -22,7 +22,6 @@
     .header h1{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800}
     .main{max-width:1200px;margin:0 auto;padding:24px 16px}
     
-    /* Pestañas de Guardia y Botón Borrado General */
     .tabs-container { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 2px solid var(--border); padding-bottom: 16px; align-items: center; flex-wrap: wrap;}
     .tab-btn { padding: 12px 24px; background: transparent; border: 1px solid var(--border); font-weight: 700; color: var(--ink-soft); cursor: pointer; border-radius: 8px; transition: all 0.2s; font-family:'DM Sans',sans-serif; font-size:14px; }
     .tab-btn:hover { background: #e2e8f0; }
@@ -65,6 +64,9 @@
   <div class="header">
     <h1>Panel de Control</h1>
     <div style="display:flex; gap:15px; align-items:center;">
+      <div style="font-size: 12px; padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.2);">
+        📱 Celulares viendo: <strong id="lbl-guardia-publica">Cargando...</strong>
+      </div>
       <div id="status-display" class="status-badge status-closed"><div class="status-dot"></div> <span id="status-text">Sistema Cerrado</span></div>
       <button class="btn btn-ghost" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
@@ -83,6 +85,19 @@
       </button>
     </div>
 
+    <!-- MÓDULO VERDE: RESTAURAR RESÚMENES HISTÓRICOS -->
+    <div class="control-panel" style="background:#F0FDF4; border-color:#bbf7d0;">
+      <div class="control-group" style="width: 100%;">
+        <div class="control-title" style="color:#16A34A;">🌟 Restaurar Resultados Previos (Para que busquen su ticket)</div>
+        <div class="control-flex">
+          <input type="file" id="excel-resumen" accept=".xlsx, .xls" />
+          <button class="btn btn-green" onclick="procesarResumenHistorico()">📥 Restaurar a la <span class="lbl-guardia-activa"></span></button>
+        </div>
+        <small style="color:#15803d; font-size:11px;">Sube aquí EXCLUSIVAMENTE los archivos "Resumen_Comedores_..." de las elecciones pasadas.</small>
+      </div>
+    </div>
+
+    <!-- PANELES DE OPERACIÓN PRINCIPAL -->
     <div class="control-panel">
       <div class="control-group">
         <div class="control-title">1. Subir Base de Datos (<span class="lbl-guardia-activa"></span>)</div>
@@ -90,18 +105,18 @@
           <input type="file" id="excel-file" accept=".xlsx, .xls" />
           <button class="btn btn-blue" onclick="procesarExcel()">Cargar a Firebase</button>
         </div>
-        <small style="color:var(--ink-soft);font-size:11px;" id="info-horario">Sube el Excel para configurar límites, padrón y horarios de esta guardia.</small>
+        <small style="color:var(--ink-soft);font-size:11px;" id="info-horario">Sube el Padrón (Configuración, Comedores, Trabajadores) para una nueva elección.</small>
       </div>
+      
+      <!-- OBSERVACIÓN APLICADA: 4 BOTONES EN UNA SOLA FILA -->
       <div class="control-group">
         <div class="control-title">2. Acciones Manuales (<span class="lbl-guardia-activa"></span>)</div>
-        <div class="control-flex">
+        <div class="control-flex" style="flex-wrap: nowrap; overflow-x: auto; padding-bottom: 5px;">
           <button id="btn-abrir" class="btn btn-green" onclick="setEstadoSistema(true)">¿Quieres Habilitar?</button>
           <button id="btn-cerrar" class="btn btn-red" onclick="setEstadoSistema(false)">✕ Está Cerrado</button>
           
-          <div style="margin-left:auto; display:flex; gap:10px;">
-            <button class="btn" style="background:#0F172A; color:#fff;" onclick="forzarSincronizacionConteos(true)">Actualizar</button>
-            <button id="btn-borrar-guardia" class="btn" style="background:#0F172A; color:#fff;" onclick="limpiarEleccionesActual()">Borrar Guardia A</button>
-          </div>
+          <button class="btn" style="background:#0F172A; color:#fff; margin-left:auto;" onclick="restablecerElecciones()">Restablecer</button>
+          <button id="btn-borrar-guardia" class="btn" style="background:#0F172A; color:#fff;" onclick="borrarGuardiaCompleta()">Borrar GUARDIA A</button>
         </div>
       </div>
     </div>
@@ -148,7 +163,8 @@ let guardiaSeleccionada = 'GUARDIA_A';
 let refsActivos = []; 
 let intervalCurador = null;
 
-let serverTimeOffset = 0; // HORA MUNDIAL GOOGLE
+let serverTimeOffset = 0; 
+let cacheGuardias = { GUARDIA_A: null, GUARDIA_B: null, GUARDIA_C: null };
 
 let LIMITES = {}, TRABAJADORES = {}, todosLosRegistros = [], sistemaForzado = null, horaInicio = "", horaFin = "";
 let vipsPendientes = {}, ELECCIONES_ACTUALES = {};
@@ -178,7 +194,42 @@ function iniciarSesion() { auth.signInWithEmailAndPassword(document.getElementBy
 function cerrarSesion() { auth.signOut(); }
 
 function iniciarPanelGlobal() {
+  // Detector Automático del Panel
+  ['GUARDIA_A', 'GUARDIA_B', 'GUARDIA_C'].forEach(g => {
+      db.ref(`evento/guardias/${g}/datos_iniciales`).on('value', snap => {
+          cacheGuardias[g] = snap.val() || null;
+          evaluarCualEstaEnVivo();
+      });
+  });
+  setInterval(evaluarCualEstaEnVivo, 1000);
+
   seleccionarGuardia('GUARDIA_A');
+}
+
+function evaluarCualEstaEnVivo() {
+    let guardiaEncontrada = null;
+    const ahora = new Date(Date.now() + serverTimeOffset);
+
+    for (let g of ['GUARDIA_A', 'GUARDIA_B', 'GUARDIA_C']) {
+        const data = cacheGuardias[g];
+        if (!data) continue;
+        let abierto = false;
+        if (data.sistemaForzado === true) abierto = true;
+        else if (data.sistemaForzado === false) abierto = false;
+        else if (data.horaInicio && data.horaFin) {
+            if (ahora >= new Date(data.horaInicio) && ahora <= new Date(data.horaFin)) abierto = true;
+        }
+        if (abierto) { guardiaEncontrada = g; break; }
+    }
+    
+    const lbl = document.getElementById('lbl-guardia-publica');
+    if (guardiaEncontrada) {
+        lbl.textContent = guardiaEncontrada.replace('_', ' ');
+        lbl.style.color = (guardiaEncontrada === guardiaSeleccionada) ? '#bbf7d0' : '#fecaca';
+    } else {
+        lbl.textContent = 'NINGUNA';
+        lbl.style.color = '#fecaca';
+    }
 }
 
 function seleccionarGuardia(g) {
@@ -187,9 +238,9 @@ function seleccionarGuardia(g) {
   document.getElementById('tab-' + g).classList.add('active');
   document.querySelectorAll('.lbl-guardia-activa').forEach(el => el.textContent = g.replace('_', ' '));
   
-  // Cambia el texto del botón Borrar dinámicamente
   document.getElementById('btn-borrar-guardia').textContent = `Borrar ${g.replace('_', ' ')}`;
   
+  evaluarCualEstaEnVivo();
   iniciarListenersGuardia();
 }
 
@@ -228,15 +279,86 @@ function iniciarListenersGuardia() {
 }
 
 // ==========================================
-// BOTÓN DE BORRADO DE GUARDIA (Estilo Fase 1)
+// MÓDULO VERDE: RESTAURAR RESÚMENES
 // ==========================================
-function limpiarEleccionesActual() {
+function procesarResumenHistorico() {
+  const file = document.getElementById('excel-resumen').files[0]; 
+  if (!file) { alert("Selecciona un archivo 'Resumen_Comedores_...' descargado previamente."); return; }
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
+      if (!wb.Sheets['Registros']) {
+         alert("Error: El Excel no tiene la pestaña 'Registros'. Asegúrate de estar subiendo el archivo de Resumen correcto.");
+         return;
+      }
+      
+      const filas = XLSX.utils.sheet_to_json(wb.Sheets['Registros']);
+      let elecciones = {}; let conteos = {};
+
+      filas.forEach(f => {
+         const dni = String(f['DNI'] || f['Dni'] || '').trim().replace(/\D/g,'').padStart(8,'0');
+         if (dni && dni !== '00000000') {
+             const cat = String(f['Categoria'] || f['Categoría'] || 'OBRERO').toUpperCase();
+             const com = String(f['Comedor'] || '').trim();
+             
+             elecciones[dni] = {
+                 nombre: String(f['Nombre'] || ''), categoria: cat, comedor: com,
+                 fecha: String(f['Fecha_Hora'] || f['Fecha'] || ''),
+                 timestamp: firebase.database.ServerValue.TIMESTAMP
+             };
+             
+             if(!conteos[com]) conteos[com] = { obrero: 0, empleado: 0 };
+             let campo = esEmpAdmin(cat) ? 'empleado' : 'obrero';
+             conteos[com][campo]++;
+         }
+      });
+
+      if(Object.keys(elecciones).length === 0) { alert("No se encontraron registros válidos en el Excel."); return; }
+
+      if(confirm(`Se van a cargar ${Object.keys(elecciones).length} tickets a la ${guardiaSeleccionada.replace('_', ' ')}.\n¿Proceder?`)) {
+          let updates = {};
+          updates[`evento/guardias/${guardiaSeleccionada}/elecciones`] = elecciones;
+          updates[`evento/guardias/${guardiaSeleccionada}/conteos`] = conteos;
+          
+          db.ref().update(updates).then(() => {
+             alert("✅ Histórico cargado correctamente. Los trabajadores ya pueden buscar sus tickets.");
+             document.getElementById('excel-resumen').value = '';
+          });
+      }
+    } catch(err) { alert("Error al procesar el archivo. Revisa que no esté dañado."); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ==========================================
+// NUEVO BOTÓN: RESTABLECER ELECCIONES
+// ==========================================
+function restablecerElecciones() {
   const nombre = guardiaSeleccionada.replace('_', ' ');
-  if(evaluarEstadoActual()) { alert(`Primero debes CERRAR la ${nombre} para poder resetear.`); return; } 
-  if(prompt(`Escribe 'BORRAR' para limpiar las elecciones de la ${nombre} (El padrón se mantendrá):`) === 'BORRAR'){
+  if(evaluarEstadoActual()) { alert(`Primero debes CERRAR la ${nombre} para poder restablecer.`); return; } 
+  if(prompt(`Escribe 'restablecer' para limpiar las elecciones de la ${nombre} (El padrón se mantendrá):`)?.toLowerCase() === 'restablecer'){
       db.ref(`evento/guardias/${guardiaSeleccionada}/elecciones`).remove();
       db.ref(`evento/guardias/${guardiaSeleccionada}/conteos`).remove();
-      alert(`Elecciones de la ${nombre} limpiadas correctamente. Dejado como si recién se hubiera adjuntado el Excel.`);
+      alert(`Elecciones restablecidas. Dejado como si recién se hubiera adjuntado el Excel limpio.`);
+  } else {
+      alert("Cancelado. La palabra no coincide.");
+  }
+}
+
+// ==========================================
+// NUEVO BOTÓN: BORRAR GUARDIA COMPLETA
+// ==========================================
+function borrarGuardiaCompleta() {
+  const nombre = guardiaSeleccionada.replace('_', ' ');
+  if(evaluarEstadoActual()) { alert(`Primero debes CERRAR la ${nombre} para poder borrar.`); return; } 
+  if(prompt(`Escribe 'BORRAR' para eliminar ABSOLUTAMENTE TODO de la ${nombre} (Incluyendo el Excel):`) === 'BORRAR'){
+      db.ref(`evento/guardias/${guardiaSeleccionada}`).remove();
+      document.getElementById('excel-file').value = '';
+      alert(`Toda la data de la ${nombre} ha sido eliminada.`);
+  } else {
+      alert("Cancelado.");
   }
 }
 
@@ -261,13 +383,12 @@ function calcularConteosReales(elecciones) {
     }); return reales;
 }
 
-function forzarSincronizacionConteos(manual = true) {
+function forzarSincronizacionConteos(manual = false) {
     if (Object.keys(LIMITES).length === 0) return; 
-    if (manual) { if(!confirm("Esto calculará los cupos EXACTOS eliminando fantasmas. ¿Proceder?")) return; }
     let reales = calcularConteosReales(ELECCIONES_ACTUALES);
     db.ref(`evento/guardias/${guardiaSeleccionada}/conteos`).set(reales).then(() => {
         if (manual) alert("Cupos sincronizados correctamente.");
-    }).catch(err => { if(manual) alert("Error al sincronizar."); });
+    });
 }
 
 function verificarDisparoVIPs() {
@@ -365,7 +486,7 @@ function actualizarUIControlSistema() {
     btnCerrar.textContent = "¿Deseas Cerrar?"; btnCerrar.disabled = false; btnCerrar.style.opacity = "1";
   } else { 
     bdg.className = "status-badge status-closed"; txt.textContent = "Sistema Cerrado"; 
-    btnAbrir.textContent = "¿Quieres Habilitar?"; btnAbrir.disabled = false; btnAbrir.style.opacity = "1";
+    btnAbrir.textContent = "¿Habilitar Manual?"; btnAbrir.disabled = false; btnAbrir.style.opacity = "1";
     btnCerrar.textContent = "✕ Está Cerrado"; btnCerrar.disabled = true; btnCerrar.style.opacity = "0.6";
   }
 }
