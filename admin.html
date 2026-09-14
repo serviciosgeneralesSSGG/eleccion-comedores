@@ -105,7 +105,7 @@
           <button id="btn-abrir" class="btn btn-green" onclick="setEstadoSistema(true)">¿Quieres Habilitar?</button>
           <button id="btn-cerrar" class="btn btn-red" onclick="setEstadoSistema(false)">✕ Está Cerrado</button>
           
-          <button class="btn" style="background:#0F172A; color:#fff;" onclick="restablecerElecciones()">Restablecer</button>
+          <button class="btn" style="background:#0F172A; color:#fff; margin-left:auto;" onclick="restablecerElecciones()">Restablecer</button>
           <button id="btn-borrar-guardia" class="btn" style="background:#0F172A; color:#fff;" onclick="borrarGuardiaCompleta()">Borrar G. A</button>
         </div>
       </div>
@@ -234,9 +234,6 @@ function iniciarListenersGuardia() {
   intervalCurador = setInterval(() => { actualizarUIControlSistema(); forzarSincronizacionConteos(false); }, 15000);
 }
 
-// ==========================================
-// RESTAURAR RESÚMENES 
-// ==========================================
 function procesarResumenHistoricoArchivoUnico() {
   const file = document.getElementById('excel-file').files[0]; 
   if (!file) { alert("Selecciona primero un archivo 'Resumen_Comedores_...' descargado previamente."); return; }
@@ -368,72 +365,52 @@ async function procesarVipAutomatico(dni, datos, cat, limite, usoReal) {
 
 function esEmpAdmin(cat) { return (cat || '').toUpperCase() === 'EMPLEADO' || (cat || '').toUpperCase() === 'PRACTICANTE'; }
 
-// ==========================================
-// FUNCIÓN PARA LEER FECHA (Col B) y HORA (Col C)
-// ==========================================
-function combinarFechaYHora(fechaExcel, horaExcel) {
-    if(!fechaExcel) return "";
-    let dateObj;
-    
-    if (fechaExcel instanceof Date) {
-        dateObj = new Date(fechaExcel);
-    } else {
-        let partes = String(fechaExcel).trim().split(/[/-]/);
-        if(partes.length === 3) {
-            let d = partes[0], m = partes[1], y = partes[2];
-            if(d.length === 4) { y = partes[0]; d = partes[2]; } 
-            if(y.length === 2) y = "20" + y;
-            dateObj = new Date(`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}T00:00:00`);
-        } else {
-            return String(fechaExcel); 
-        }
-    }
-
-    let hrs = 0, mins = 0;
-    if (horaExcel) {
-        if (horaExcel instanceof Date) {
-            hrs = horaExcel.getHours(); mins = horaExcel.getMinutes();
-        } else {
-            let timeStr = String(horaExcel).trim();
-            if(!isNaN(timeStr) && timeStr.indexOf(':') === -1) {
-                let totalSecs = Math.round(parseFloat(timeStr) * 86400);
-                hrs = Math.floor(totalSecs / 3600); mins = Math.floor((totalSecs % 3600) / 60);
-            } else {
-                let timeParts = timeStr.split(':');
-                if(timeParts.length >= 2) { hrs = parseInt(timeParts[0], 10); mins = parseInt(timeParts[1], 10); }
-            }
-        }
-    }
-
-    let yyyy = dateObj.getFullYear();
-    let mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-    let dd = String(dateObj.getDate()).padStart(2, '0');
-    let hh = String(hrs).padStart(2, '0');
-    let minStr = String(mins).padStart(2, '0');
-    
-    return `${yyyy}-${mm}-${dd}T${hh}:${minStr}:00`;
-}
-
+// LECTOR ROBUSTO DE EXCEL
 function procesarExcel() {
   const file = document.getElementById('excel-file').files[0]; if (!file) { alert("Selecciona un Excel de padrón."); return; }
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
-      const wb = XLSX.read(new Uint8Array(e.target.result), {type: 'array', cellDates: true}); 
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type: 'array', cellDates: false}); 
       let trab = {}, lim = {}, preVips = {}, hInicioTxt = "", hFinTxt = "", isoInicio = "", isoFin = "";
       
       if (wb.Sheets['CONFIGURACION']) {
-        XLSX.utils.sheet_to_json(wb.Sheets['CONFIGURACION'], {header: 1, raw: false, dateNF: 'dd/mm/yyyy'}).forEach(f => { 
-            if(f[0] === 'INICIO' && f[1]) { 
-                hInicioTxt = String(f[1]).trim() + (f[2] ? ' ' + String(f[2]).trim() : ''); 
-                isoInicio = combinarFechaYHora(f[1], f[2]); 
-            }
-            if(f[0] === 'FIN' && f[1]) { 
-                hFinTxt = String(f[1]).trim() + (f[2] ? ' ' + String(f[2]).trim() : ''); 
-                isoFin = combinarFechaYHora(f[1], f[2]); 
+        XLSX.utils.sheet_to_json(wb.Sheets['CONFIGURACION'], {header: 1, raw: false}).forEach(f => { 
+            if(f[0] === 'INICIO' || f[0] === 'FIN') {
+                let fechaCruda = String(f[1] || '').trim();
+                let horaCruda = String(f[2] || '').trim();
+                
+                let pFecha = fechaCruda.split('/');
+                let fISO = "";
+                if(pFecha.length === 3) {
+                    let d = pFecha[0].padStart(2, '0');
+                    let m = pFecha[1].padStart(2, '0');
+                    let y = pFecha[2];
+                    if(y.length === 2) y = "20" + y; 
+                    fISO = `${y}-${m}-${d}`;
+                }
+                
+                let pHora = horaCruda.split(':');
+                let hISO = "00:00:00";
+                if(pHora.length >= 2) {
+                    let hh = pHora[0].padStart(2, '0');
+                    let mm = pHora[1].padStart(2, '0');
+                    hISO = `${hh}:${mm}:00`;
+                }
+
+                if(fISO && hISO && fISO !== "undefined-undefined-undefined") {
+                    if(f[0] === 'INICIO') {
+                        hInicioTxt = `${fechaCruda} ${horaCruda}`;
+                        isoInicio = `${fISO}T${hISO}`;
+                    } else {
+                        hFinTxt = `${fechaCruda} ${horaCruda}`;
+                        isoFin = `${fISO}T${hISO}`;
+                    }
+                }
             }
         });
       }
+      
       if (wb.Sheets['COMEDORES']) { XLSX.utils.sheet_to_json(wb.Sheets['COMEDORES'], {header: 1}).slice(1).forEach(f => { if(f[0]) lim[String(f[0]).trim()] = {obrero: parseInt(f[1])||0, empleado: parseInt(f[2])||0}; }); }
       if (wb.Sheets['TRABAJADORES']) { XLSX.utils.sheet_to_json(wb.Sheets['TRABAJADORES'], {header: 1}).slice(1).forEach(f => { 
           if(f[0]){
@@ -446,11 +423,12 @@ function procesarExcel() {
       let updates = {}; const basePath = `evento/guardias/${guardiaSeleccionada}`;
       updates[`${basePath}/datos_iniciales`] = { limites: lim, horaInicio: isoInicio, horaFin: isoFin, horaInicioTxt: hInicioTxt, horaFinTxt: hFinTxt, sistemaForzado: null };
       updates[`${basePath}/trabajadores`] = trab; updates[`${basePath}/vips_pendientes`] = preVips; 
+      
       db.ref().update(updates).then(() => {
           alert(`Excel cargado exitosamente en ${guardiaSeleccionada.replace('_', ' ')}.`);
           document.getElementById('excel-file').value = '';
       });
-    } catch (er) { alert("Error al leer Excel. Asegura que tenga las pestañas correctas."); console.log(er); }
+    } catch (er) { alert("Error al leer Excel. Asegura que la Fecha esté en la columna B (DD/MM/YYYY) y la Hora en la columna C (HH:MM)."); }
   }; reader.readAsArrayBuffer(file);
 }
 
@@ -466,14 +444,30 @@ function setEstadoSistema(estadoDeseado) {
     else { if(confirm(`¿Seguro que deseas CERRAR la ${guardiaSeleccionada.replace('_',' ')} ahora mismo?`)) { db.ref(`evento/guardias/${guardiaSeleccionada}/datos_iniciales/sistemaForzado`).set(false); } }
 }
 
+// CORRECCIÓN: CÓDIGO QUE CAMBIA EL CARTEL DE ARRIBA A LA DERECHA
 function actualizarUIControlSistema() {
-  const activo = evaluarEstadoActual(), btnAbrir = document.getElementById('btn-abrir'), btnCerrar = document.getElementById('btn-cerrar');
+  const activo = evaluarEstadoActual();
+  const btnAbrir = document.getElementById('btn-abrir');
+  const btnCerrar = document.getElementById('btn-cerrar');
+  const badgeSuperior = document.getElementById('status-display');
+  const textoSuperior = document.getElementById('status-text');
+
   if (activo) { 
-    btnAbrir.textContent = "¿Quieres Habilitar?"; btnAbrir.disabled = true; btnAbrir.style.opacity = "0.6"; btnAbrir.style.cursor = "default";
+    // Actualiza los botones
+    btnAbrir.textContent = "✓ Abierto"; btnAbrir.disabled = true; btnAbrir.style.opacity = "0.6"; btnAbrir.style.cursor = "default";
     btnCerrar.textContent = "✕ Cerrar Manual"; btnCerrar.disabled = false; btnCerrar.style.opacity = "1"; btnCerrar.style.cursor = "pointer";
+    
+    // Actualiza el cartel superior derecho
+    badgeSuperior.className = "status-badge status-open";
+    textoSuperior.textContent = "Sistema Abierto";
   } else { 
+    // Actualiza los botones
     btnAbrir.textContent = "¿Quieres Habilitar?"; btnAbrir.disabled = false; btnAbrir.style.opacity = "1"; btnAbrir.style.cursor = "pointer";
     btnCerrar.textContent = "✕ Está Cerrado"; btnCerrar.disabled = true; btnCerrar.style.opacity = "0.6"; btnCerrar.style.cursor = "default";
+    
+    // Actualiza el cartel superior derecho
+    badgeSuperior.className = "status-badge status-closed";
+    textoSuperior.textContent = "Sistema Cerrado";
   }
 }
 
