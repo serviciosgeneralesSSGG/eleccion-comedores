@@ -175,8 +175,8 @@
     .btn-consultar{width:100%;padding:12px 16px;border:2px solid var(--ink);
       border-radius:var(--radius-md);font-family:'DM Sans',sans-serif;
       font-size:14px;font-weight:700;cursor:pointer;
-      background:var(--ink);color:#fff;margin-top:12px;transition:all var(--trans)}
-    .btn-consultar:hover:not(:disabled){background:#222}
+      background:var(--surface);color:var(--ink-soft);margin-top:12px;transition:all var(--trans)}
+    .btn-consultar:hover:not(:disabled){background:#F1F5F9; color:var(--ink);}
     .btn-consultar:disabled{background:var(--surface);color:var(--ink-faint);
       border-color:var(--border);cursor:not-allowed}
 
@@ -224,6 +224,7 @@
             <button class="dni-clear" id="dni-clear-consulta"
               onclick="limpiarDniConsulta()" tabindex="-1">✕</button>
           </div>
+          <!-- TEXTO CORREGIDO -->
           <button id="btn-consultar" class="btn-consultar"
             onclick="consultarTicketCerrado()" disabled>
             Consultar
@@ -427,7 +428,7 @@ function cargarSistema() {
       serverTimeOffset = snap.val() || 0;
     });
 
-    // Detectar automáticamente qué guardia está abierta leyendo las 3
+    // AUTO-DETECTOR DE GUARDIA ABIERTA
     ['GUARDIA_A', 'GUARDIA_B', 'GUARDIA_C'].forEach(g => {
         db.ref(`evento/guardias/${g}/datos_iniciales`).on('value', snap => {
             cacheGuardias[g] = snap.val() || null;
@@ -436,7 +437,6 @@ function cargarSistema() {
     });
 
     if(timerReloj) clearInterval(timerReloj);
-    // PRECISIÓN MILITAR: Revisa la hora cada 1000ms
     timerReloj = setInterval(evaluarRelojInteligente, 1000);
 
   } catch (e) {
@@ -448,9 +448,10 @@ function cargarSistema() {
 // ⏰ EL RELOJ INTELIGENTE AUTODETECTOR
 function evaluarRelojInteligente() {
     let guardiaEncontrada = null;
+    let msjCerradoGeneral = "El acceso al sistema se encuentra inactivo. Por favor, manténgase atento a los canales oficiales de comunicación.";
+    
     const ahora = new Date(Date.now() + serverTimeOffset);
 
-    // Revisa A, B y C para ver cuál está abierta según el Admin o el Excel
     for (let g of ['GUARDIA_A', 'GUARDIA_B', 'GUARDIA_C']) {
         const data = cacheGuardias[g];
         if (!data) continue;
@@ -461,11 +462,13 @@ function evaluarRelojInteligente() {
         else if (data.horaInicio && data.horaFin) {
             if (ahora >= new Date(data.horaInicio) && ahora <= new Date(data.horaFin)) {
                 abierto = true;
+            } else if (ahora < new Date(data.horaInicio)) {
+                msjCerradoGeneral = data.mensajeSistema || msjCerradoGeneral;
             }
         }
         if (abierto) {
             guardiaEncontrada = g;
-            break; // Si encuentra una abierta, se queda con esa.
+            break; 
         }
     }
 
@@ -475,8 +478,7 @@ function evaluarRelojInteligente() {
 
     if (cambioEstado || (!_sistemaAbierto && document.getElementById('sec-loader').classList.contains('on'))) {
         if (!_sistemaAbierto) {
-            // El mensaje solicitado si todo está cerrado
-            document.getElementById('msg-cerrado').textContent = "El acceso al sistema se encuentra temporalmente inactivo. Por favor, manténgase atento a los canales oficiales de comunicación, donde se informará oportunamente el horario de apertura para la selección de su comedor.";
+            document.getElementById('msg-cerrado').textContent = msjCerradoGeneral;
             const viendoTicket = document.getElementById('sec-exito').classList.contains('on') || document.getElementById('sec-ya').classList.contains('on');
             if (!viendoTicket) show('sec-cerrado');
         } else {
@@ -525,8 +527,10 @@ async function consultarTicketCerrado() {
       document.getElementById('ticket-bg-ya').textContent = (dni + ' ').repeat(150);
       limpiarRelojes(); _relojYa = setInterval(() => { document.getElementById('live-clock-ya').textContent = new Date(Date.now() + serverTimeOffset).toLocaleTimeString('es-PE'); }, 1000);
       document.getElementById('card-header').style.display = 'none'; show('sec-ya');
-    } else { setErr('err-consulta', 'No registras elección. Consulta con Servicios Generales.'); }
+    } else { setErr('err-consulta', 'No registras elección en ninguna Guardia. Consulta con Servicios Generales.'); }
   } catch (e) { setErr('err-consulta', 'Error de red al consultar. Intenta de nuevo.'); }
+  
+  // TEXTO CORREGIDO A "Consultar"
   btn.textContent = 'Consultar'; btn.disabled = false;
 }
 
