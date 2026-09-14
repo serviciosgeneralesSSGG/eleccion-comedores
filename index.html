@@ -199,7 +199,7 @@
       </div>
     </div>
 
-    <!-- CERRADO + MÓDULO DE CONSULTA -->
+    <!-- CERRADO + MÓDULO DE CONSULTA UNIVERSAL -->
     <div id="sec-cerrado" class="sec">
       <div class="state-block ani">
         <div class="state-icon red">
@@ -212,7 +212,6 @@
         <h2>Sistema Cerrado</h2>
         <p id="msg-cerrado"></p>
 
-        <!-- Buscador Universal Fase 2 -->
         <div class="consulta-box">
           <span class="consulta-title">¿Olvidaste tu comedor? Consulta aquí</span>
           <div class="dni-wrap">
@@ -224,7 +223,6 @@
             <button class="dni-clear" id="dni-clear-consulta"
               onclick="limpiarDniConsulta()" tabindex="-1">✕</button>
           </div>
-          <!-- TEXTO CORREGIDO -->
           <button id="btn-consultar" class="btn-consultar"
             onclick="consultarTicketCerrado()" disabled>
             Consultar
@@ -387,7 +385,7 @@
 <script src="config.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════════
-//  ESTADO GLOBAL - FASE 2
+//  ESTADO GLOBAL
 // ══════════════════════════════════════════════════════════════
 let db;
 let LIMITES        = {};
@@ -527,10 +525,9 @@ async function consultarTicketCerrado() {
       document.getElementById('ticket-bg-ya').textContent = (dni + ' ').repeat(150);
       limpiarRelojes(); _relojYa = setInterval(() => { document.getElementById('live-clock-ya').textContent = new Date(Date.now() + serverTimeOffset).toLocaleTimeString('es-PE'); }, 1000);
       document.getElementById('card-header').style.display = 'none'; show('sec-ya');
-    } else { setErr('err-consulta', 'No registras elección en ninguna Guardia. Consulta con Servicios Generales.'); }
+    } else { setErr('err-consulta', 'No registras elección. Consulta con Servicios Generales.'); }
   } catch (e) { setErr('err-consulta', 'Error de red al consultar. Intenta de nuevo.'); }
   
-  // TEXTO CORREGIDO A "Consultar"
   btn.textContent = 'Consultar'; btn.disabled = false;
 }
 
